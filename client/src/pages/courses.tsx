@@ -29,6 +29,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Search, Monitor, Users } from "lucide-react";
+import { CsvImport } from "@/components/csv-import";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { InsertCourse } from "@shared/schema";
@@ -88,12 +89,14 @@ export default function Courses() {
           <h1 className="text-3xl font-display font-bold text-slate-900">Courses</h1>
           <p className="text-slate-500">Track large lecture sections and online courses.</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20">
-              <Plus className="w-4 h-4 mr-2" /> Add Course
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2 flex-wrap">
+          <CsvImport type="courses" />
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" /> Add Course
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Add New Course</DialogTitle>
@@ -207,7 +210,8 @@ export default function Courses() {
               </form>
             </Form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <div className="relative">

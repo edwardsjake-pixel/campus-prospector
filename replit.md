@@ -49,8 +49,14 @@ Preferred communication style: Simple, everyday language.
 - `office_hours` — Day of week, start/end time, location, virtual flag, linked to instructor
 - `visits` — Date, location, notes, linked to user (sales rep)
 - `visit_interactions` — Interactions during visits (linked to visits)
+- `planned_meetings` — Date, start/end time, instructor, location, purpose, status, linked to user
 - `sessions` — Session storage for Replit Auth (mandatory, do not drop)
 - `users` — User storage for Replit Auth (mandatory, do not drop)
+
+### Key Components
+- `client/src/components/csv-import.tsx` — Reusable CSV import dialog (parses CSV, column mapping, preview, bulk upload)
+- `client/src/components/voice-dictation.tsx` — Voice dictation using Web Speech API
+- `client/src/components/audio-recorder.tsx` — Audio recording using MediaRecorder API
 
 ### Storage Layer
 - `server/storage.ts` defines an `IStorage` interface and `DatabaseStorage` implementation

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { instructors, courses, officeHours, visits, visitInteractions } from './schema';
+import { instructors, courses, officeHours, visits, visitInteractions, plannedMeetings } from './schema';
 import { createInsertSchema } from 'drizzle-zod';
 
 // ============================================
@@ -133,6 +133,59 @@ export const api = {
       },
     },
   },
+  plannedMeetings: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/planned-meetings' as const,
+      responses: {
+        200: z.array(z.custom<typeof plannedMeetings.$inferSelect>()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/planned-meetings' as const,
+      input: createInsertSchema(plannedMeetings).omit({ id: true, createdAt: true, userId: true }),
+      responses: {
+        201: z.custom<typeof plannedMeetings.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/planned-meetings/:id' as const,
+      input: createInsertSchema(plannedMeetings).omit({ id: true, createdAt: true, userId: true }).partial(),
+      responses: {
+        200: z.custom<typeof plannedMeetings.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/planned-meetings/:id' as const,
+      responses: {
+        200: z.object({ message: z.string() }),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+  import: {
+    instructors: {
+      method: 'POST' as const,
+      path: '/api/import/instructors' as const,
+      responses: {
+        200: z.object({ imported: z.number() }),
+        400: errorSchemas.validation,
+      },
+    },
+    courses: {
+      method: 'POST' as const,
+      path: '/api/import/courses' as const,
+      responses: {
+        200: z.object({ imported: z.number() }),
+        400: errorSchemas.validation,
+      },
+    },
+  },
 };
 
 // ============================================
@@ -158,3 +211,4 @@ export type CourseInput = z.infer<typeof api.courses.create.input>;
 export type OfficeHourInput = z.infer<typeof api.officeHours.create.input>;
 export type VisitInput = z.infer<typeof api.visits.create.input>;
 export type InteractionInput = z.infer<typeof api.interactions.create.input>;
+export type PlannedMeetingInput = z.infer<typeof api.plannedMeetings.create.input>;

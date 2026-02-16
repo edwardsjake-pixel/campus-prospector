@@ -55,12 +55,27 @@ export const visitInteractions = pgTable("visit_interactions", {
   notes: text("notes"),
 });
 
+export const plannedMeetings = pgTable("planned_meetings", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(),
+  startTime: time("start_time").notNull(),
+  endTime: time("end_time").notNull(),
+  instructorId: integer("instructor_id").references(() => instructors.id).notNull(),
+  userId: text("user_id").notNull(),
+  location: text("location"),
+  purpose: text("purpose"),
+  status: text("status").default("planned"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // === RELATIONS ===
 
 export const instructorsRelations = relations(instructors, ({ many }) => ({
   courses: many(courses),
   officeHours: many(officeHours),
   interactions: many(visitInteractions),
+  plannedMeetings: many(plannedMeetings),
 }));
 
 export const coursesRelations = relations(courses, ({ one }) => ({
@@ -92,6 +107,13 @@ export const visitInteractionsRelations = relations(visitInteractions, ({ one })
   }),
 }));
 
+export const plannedMeetingsRelations = relations(plannedMeetings, ({ one }) => ({
+  instructor: one(instructors, {
+    fields: [plannedMeetings.instructorId],
+    references: [instructors.id],
+  }),
+}));
+
 // === BASE SCHEMAS ===
 
 export const insertInstructorSchema = createInsertSchema(instructors).omit({ id: true, createdAt: true });
@@ -99,6 +121,7 @@ export const insertCourseSchema = createInsertSchema(courses).omit({ id: true })
 export const insertOfficeHourSchema = createInsertSchema(officeHours).omit({ id: true });
 export const insertVisitSchema = createInsertSchema(visits).omit({ id: true, createdAt: true });
 export const insertVisitInteractionSchema = createInsertSchema(visitInteractions).omit({ id: true });
+export const insertPlannedMeetingSchema = createInsertSchema(plannedMeetings).omit({ id: true, createdAt: true });
 
 // === EXPLICIT API CONTRACT TYPES ===
 
@@ -112,6 +135,8 @@ export type Visit = typeof visits.$inferSelect;
 export type InsertVisit = z.infer<typeof insertVisitSchema>;
 export type VisitInteraction = typeof visitInteractions.$inferSelect;
 export type InsertVisitInteraction = z.infer<typeof insertVisitInteractionSchema>;
+export type PlannedMeeting = typeof plannedMeetings.$inferSelect;
+export type InsertPlannedMeeting = z.infer<typeof insertPlannedMeetingSchema>;
 
 // Complex types for UI
 export type InstructorWithDetails = Instructor & {
@@ -121,4 +146,8 @@ export type InstructorWithDetails = Instructor & {
 
 export type VisitWithInteractions = Visit & {
   interactions: (VisitInteraction & { instructor: Instructor })[];
+};
+
+export type PlannedMeetingWithInstructor = PlannedMeeting & {
+  instructor: Instructor;
 };

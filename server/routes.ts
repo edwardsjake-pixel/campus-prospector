@@ -5,7 +5,7 @@ import { setupAuth } from "./replit_integrations/auth";
 import { registerAuthRoutes } from "./replit_integrations/auth";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { insertInstructorSchema, insertCourseSchema, insertOfficeHourSchema, insertVisitSchema, insertVisitInteractionSchema } from "@shared/schema";
+import { insertInstructorSchema, insertCourseSchema, insertOfficeHourSchema, insertVisitSchema, insertVisitInteractionSchema, insertPlannedMeetingSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -123,6 +123,95 @@ export async function registerRoutes(
       res.status(201).json(interaction);
     } catch (error) {
       res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
+  // === Planned Meetings ===
+  app.get(api.plannedMeetings.list.path, async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const date = req.query.date as string | undefined;
+    const meetings = await storage.getPlannedMeetings((req.user as any).claims.sub, date);
+    res.json(meetings);
+  });
+
+  app.post(api.plannedMeetings.create.path, async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const input = api.plannedMeetings.create.input.parse(req.body);
+      const meeting = await storage.createPlannedMeeting({
+        ...input,
+        userId: (req.user as any).claims.sub,
+      });
+      res.status(201).json(meeting);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
+  app.put(api.plannedMeetings.update.path, async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const input = api.plannedMeetings.update.input.parse(req.body);
+      const meeting = await storage.updatePlannedMeeting(Number(req.params.id), input);
+      res.json(meeting);
+    } catch (error) {
+      res.status(404).json({ message: "Meeting not found" });
+    }
+  });
+
+  app.delete(api.plannedMeetings.delete.path, async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      await storage.deletePlannedMeeting(Number(req.params.id));
+      res.json({ message: "Deleted" });
+    } catch (error) {
+      res.status(404).json({ message: "Meeting not found" });
+    }
+  });
+
+  // === CSV Import ===
+  app.post(api.import.instructors.path, async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const rows = req.body.rows as any[];
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ message: "No data provided" });
+      }
+      const items = rows.map((row: any) => ({
+        name: String(row.name || "").trim(),
+        email: row.email ? String(row.email).trim() : null,
+        department: row.department ? String(row.department).trim() : null,
+        officeLocation: row.officeLocation || row.office_location ? String(row.officeLocation || row.office_location).trim() : null,
+        bio: row.bio ? String(row.bio).trim() : null,
+        notes: row.notes ? String(row.notes).trim() : null,
+        targetPriority: row.targetPriority || row.target_priority || "medium",
+      })).filter(item => item.name.length > 0);
+      const created = await storage.bulkCreateInstructors(items);
+      res.json({ imported: created.length });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to import instructors" });
+    }
+  });
+
+  app.post(api.import.courses.path, async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const rows = req.body.rows as any[];
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ message: "No data provided" });
+      }
+      const items = rows.map((row: any) => ({
+        code: String(row.code || "").trim(),
+        name: String(row.name || "").trim(),
+        term: String(row.term || "").trim(),
+        format: String(row.format || "in-person").trim(),
+        enrollment: row.enrollment ? Number(row.enrollment) : 0,
+        instructorId: row.instructorId || row.instructor_id ? Number(row.instructorId || row.instructor_id) : null,
+      })).filter(item => item.code.length > 0 && item.name.length > 0);
+      const created = await storage.bulkCreateCourses(items);
+      res.json({ imported: created.length });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to import courses" });
     }
   });
 

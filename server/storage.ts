@@ -4,6 +4,7 @@ import {
   officeHours,
   visits,
   visitInteractions,
+  plannedMeetings,
   type Instructor,
   type InsertInstructor,
   type Course,
@@ -14,6 +15,8 @@ import {
   type InsertVisit,
   type VisitInteraction,
   type InsertVisitInteraction,
+  type PlannedMeeting,
+  type InsertPlannedMeeting,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, like, or, and } from "drizzle-orm";
@@ -39,6 +42,16 @@ export interface IStorage {
   
   // Interactions
   createInteraction(interaction: InsertVisitInteraction): Promise<VisitInteraction>;
+
+  // Planned Meetings
+  getPlannedMeetings(userId: string, date?: string): Promise<PlannedMeeting[]>;
+  createPlannedMeeting(meeting: InsertPlannedMeeting): Promise<PlannedMeeting>;
+  updatePlannedMeeting(id: number, updates: Partial<InsertPlannedMeeting>): Promise<PlannedMeeting>;
+  deletePlannedMeeting(id: number): Promise<void>;
+
+  // Bulk operations
+  bulkCreateInstructors(items: InsertInstructor[]): Promise<Instructor[]>;
+  bulkCreateCourses(items: InsertCourse[]): Promise<Course[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -118,6 +131,38 @@ export class DatabaseStorage implements IStorage {
   async createInteraction(interaction: InsertVisitInteraction): Promise<VisitInteraction> {
     const [newInteraction] = await db.insert(visitInteractions).values(interaction).returning();
     return newInteraction;
+  }
+
+  // Planned Meetings
+  async getPlannedMeetings(userId: string, date?: string): Promise<PlannedMeeting[]> {
+    const conditions = [eq(plannedMeetings.userId, userId)];
+    if (date) conditions.push(eq(plannedMeetings.date, date));
+    return await db.select().from(plannedMeetings).where(and(...conditions));
+  }
+
+  async createPlannedMeeting(meeting: InsertPlannedMeeting): Promise<PlannedMeeting> {
+    const [newMeeting] = await db.insert(plannedMeetings).values(meeting).returning();
+    return newMeeting;
+  }
+
+  async updatePlannedMeeting(id: number, updates: Partial<InsertPlannedMeeting>): Promise<PlannedMeeting> {
+    const [updated] = await db.update(plannedMeetings).set(updates).where(eq(plannedMeetings.id, id)).returning();
+    return updated;
+  }
+
+  async deletePlannedMeeting(id: number): Promise<void> {
+    await db.delete(plannedMeetings).where(eq(plannedMeetings.id, id));
+  }
+
+  // Bulk operations
+  async bulkCreateInstructors(items: InsertInstructor[]): Promise<Instructor[]> {
+    if (items.length === 0) return [];
+    return await db.insert(instructors).values(items).returning();
+  }
+
+  async bulkCreateCourses(items: InsertCourse[]): Promise<Course[]> {
+    if (items.length === 0) return [];
+    return await db.insert(courses).values(items).returning();
   }
 }
 
