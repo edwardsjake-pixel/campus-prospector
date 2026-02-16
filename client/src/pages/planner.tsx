@@ -18,7 +18,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Plus, Clock, MapPin, Trash2, CalendarDays, Check, GripVertical } from "lucide-react";
-import type { PlannedMeeting, Instructor, OfficeHour } from "@shared/schema";
+import type { PlannedMeeting, Instructor, OfficeHour, Course } from "@shared/schema";
+import { InstructorDetailToggle } from "@/components/instructor-detail-popover";
 
 const HOUR_START = 7;
 const HOUR_END = 21;
@@ -38,6 +39,8 @@ interface LectureBlock {
 interface AvailabilityRow {
   instructor: Instructor;
   officeHours: OfficeHour[];
+  allOfficeHours: OfficeHour[];
+  courses: Course[];
   lectures: LectureBlock[];
 }
 
@@ -670,10 +673,10 @@ export default function Planner() {
                             >
                               <GripVertical className="w-4 h-4" />
                             </div>
-                            <div className="min-w-0 flex-1 flex flex-col justify-center">
+                            <div className="min-w-0 flex-1 flex flex-col justify-center relative">
                               <p className="font-medium text-sm truncate">{row.instructor.name}</p>
                             {row.instructor.department && (
-                              <span className="text-[11px] text-muted-foreground truncate block">{row.instructor.department}</span>
+                              <span className="text-[10px] text-muted-foreground truncate block">{row.instructor.department}</span>
                             )}
                             {row.instructor.officeLocation && (
                               <div className="flex items-center gap-0.5 mt-0.5">
@@ -681,6 +684,11 @@ export default function Planner() {
                                 <span className="text-[10px] text-muted-foreground truncate">{row.instructor.officeLocation}</span>
                               </div>
                             )}
+                            <InstructorDetailToggle
+                              instructor={row.instructor}
+                              courses={row.courses || []}
+                              officeHours={row.allOfficeHours || row.officeHours}
+                            />
                             </div>
                           </div>
 

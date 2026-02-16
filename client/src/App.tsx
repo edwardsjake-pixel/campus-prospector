@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react";
 
 import Dashboard from "@/pages/dashboard";
 import Instructors from "@/pages/instructors";
-import Courses from "@/pages/courses";
+import { Redirect } from "wouter";
 import Visits from "@/pages/visits";
 import Planner from "@/pages/planner";
 import Availability from "@/pages/availability";
@@ -46,7 +46,7 @@ function Router() {
         {() => <ProtectedRoute component={Instructors} />}
       </Route>
       <Route path="/courses">
-        {() => <ProtectedRoute component={Courses} />}
+        {() => <Redirect to="/instructors" />}
       </Route>
       <Route path="/visits">
         {() => <ProtectedRoute component={Visits} />}

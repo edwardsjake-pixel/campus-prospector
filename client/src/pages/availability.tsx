@@ -12,7 +12,8 @@ import { MapPin, User, Filter, CalendarPlus, Building2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import type { Instructor, OfficeHour } from "@shared/schema";
+import type { Instructor, OfficeHour, Course } from "@shared/schema";
+import { InstructorDetailToggle } from "@/components/instructor-detail-popover";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -34,6 +35,8 @@ interface LectureBlock {
 interface AvailabilityRow {
   instructor: Instructor;
   officeHours: OfficeHour[];
+  allOfficeHours: OfficeHour[];
+  courses: Course[];
   lectures: LectureBlock[];
 }
 
@@ -417,7 +420,7 @@ export default function Availability() {
                         data-testid={`row-instructor-${row.instructor.id}`}
                       >
                         <div className="w-56 shrink-0 px-4 py-3 border-r flex items-center gap-2">
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 relative">
                             <p className="font-medium text-sm truncate" data-testid={`text-instructor-name-${row.instructor.id}`}>
                               {row.instructor.name}
                             </p>
@@ -435,6 +438,11 @@ export default function Availability() {
                                 <span className="text-[10px] text-muted-foreground truncate">{row.instructor.officeLocation}</span>
                               </div>
                             )}
+                            <InstructorDetailToggle
+                              instructor={row.instructor}
+                              courses={row.courses || []}
+                              officeHours={row.allOfficeHours || row.officeHours}
+                            />
                           </div>
                           {hasSchedule && (
                             <Tooltip>

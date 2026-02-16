@@ -239,9 +239,13 @@ export async function registerRoutes(
           c.lectureStartTime && c.lectureEndTime
       );
       if (!showAll && oh.length === 0 && lectures.length === 0) return null;
+      const instructorCourses = allCourses.filter(c => c.instructorId === instructor.id);
+      const allOh = allOfficeHours.filter(o => o.instructorId === instructor.id);
       return {
         instructor,
         officeHours: oh,
+        allOfficeHours: allOh,
+        courses: instructorCourses,
         lectures: lectures.map(l => ({
           id: l.id,
           code: l.code,

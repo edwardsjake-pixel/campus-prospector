@@ -3,7 +3,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { 
   LayoutDashboard, 
   Users, 
-  BookOpen, 
   MapPin, 
   Calendar, 
   GanttChart,
@@ -23,8 +22,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Instructors', href: '/instructors', icon: Users },
-    { name: 'Courses', href: '/courses', icon: BookOpen },
+    { name: 'Faculty & Courses', href: '/instructors', icon: Users },
     { name: 'Visits', href: '/visits', icon: MapPin },
     { name: 'Planner', href: '/planner', icon: Calendar },
     { name: 'Availability', href: '/availability', icon: GanttChart },
