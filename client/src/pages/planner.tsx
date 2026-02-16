@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
@@ -8,16 +9,145 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Plus, Clock, MapPin, User, Trash2, CalendarDays } from "lucide-react";
+import { Plus, Clock, MapPin, User, Trash2, CalendarDays, Check } from "lucide-react";
 import type { PlannedMeeting, Instructor, OfficeHour } from "@shared/schema";
+
+const HOUR_START = 7;
+const HOUR_END = 21;
+const TOTAL_HOURS = HOUR_END - HOUR_START;
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+interface LectureBlock {
+  id: number;
+  code: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  building: string | null;
+  room: string | null;
+}
+
+interface AvailabilityRow {
+  instructor: Instructor;
+  officeHours: OfficeHour[];
+  lectures: LectureBlock[];
+}
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function minutesToPosition(minutes: number): number {
+  const startMinutes = HOUR_START * 60;
+  const totalMinutes = TOTAL_HOURS * 60;
+  return ((minutes - startMinutes) / totalMinutes) * 100;
+}
+
+function minutesToWidth(start: number, end: number): number {
+  const totalMinutes = TOTAL_HOURS * 60;
+  return ((end - start) / totalMinutes) * 100;
+}
+
+function formatTime(time: string): string {
+  const [h, m] = time.split(":");
+  const hour = parseInt(h);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const display = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+  return `${display}:${m} ${ampm}`;
+}
+
+function computeAvailableWindows(
+  officeHours: OfficeHour[],
+  lectures: LectureBlock[],
+  bufferMinutes: number = 30
+): { start: number; end: number }[] {
+  const windows: { start: number; end: number }[] = [];
+  for (const oh of officeHours) {
+    windows.push({ start: timeToMinutes(oh.startTime), end: timeToMinutes(oh.endTime) });
+  }
+  for (const lec of lectures) {
+    const lecStart = timeToMinutes(lec.startTime);
+    const lecEnd = timeToMinutes(lec.endTime);
+    windows.push({ start: Math.max(lecStart - bufferMinutes, HOUR_START * 60), end: lecStart });
+    windows.push({ start: lecEnd, end: Math.min(lecEnd + bufferMinutes, HOUR_END * 60) });
+  }
+  if (windows.length === 0) return [];
+  windows.sort((a, b) => a.start - b.start);
+  const merged: { start: number; end: number }[] = [windows[0]];
+  for (let i = 1; i < windows.length; i++) {
+    const last = merged[merged.length - 1];
+    if (windows[i].start <= last.end) {
+      last.end = Math.max(last.end, windows[i].end);
+    } else {
+      merged.push(windows[i]);
+    }
+  }
+  return merged;
+}
+
+function TimeBlock({
+  startMin,
+  endMin,
+  color,
+  label,
+  sublabel,
+  variant,
+  onClick,
+}: {
+  startMin: number;
+  endMin: number;
+  color: string;
+  label: string;
+  sublabel?: string;
+  variant: "office" | "lecture" | "available" | "meeting";
+  onClick?: () => void;
+}) {
+  const left = minutesToPosition(startMin);
+  const width = minutesToWidth(startMin, endMin);
+  if (width <= 0) return null;
+
+  const borderClass = variant === "office"
+    ? "border-emerald-400/50"
+    : variant === "lecture"
+    ? "border-blue-400/50"
+    : variant === "meeting"
+    ? "border-purple-400/60"
+    : "border-amber-300/40";
+
+  const zClass = variant === "meeting" ? "z-[5]" : "z-[1]";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={`absolute top-1 bottom-1 rounded-md border ${color} ${borderClass} ${zClass} flex items-center overflow-hidden transition-opacity ${onClick ? "cursor-pointer" : "cursor-default"}`}
+          style={{ left: `${left}%`, width: `${width}%`, minWidth: "2px" }}
+          data-testid={`block-${variant}`}
+          onClick={onClick}
+        >
+          {width > 4 && (
+            <span className="text-[10px] font-medium truncate px-1 leading-tight">
+              {label}
+            </span>
+          )}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs">
+        <p className="font-semibold text-sm">{label}</p>
+        {sublabel && <p className="text-xs text-muted-foreground">{sublabel}</p>}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 const meetingFormSchema = z.object({
   instructorId: z.coerce.number().min(1, "Select an instructor"),
@@ -33,12 +163,10 @@ const meetingFormSchema = z.object({
 
 type MeetingFormValues = z.infer<typeof meetingFormSchema>;
 
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
 const STATUS_COLORS: Record<string, string> = {
-  planned: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  completed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-  cancelled: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  planned: "bg-purple-100 text-purple-700",
+  completed: "bg-green-100 text-green-700",
+  cancelled: "bg-red-100 text-red-700",
 };
 
 export default function Planner() {
@@ -59,11 +187,14 @@ export default function Planner() {
     queryKey: ["/api/instructors"],
   });
 
-  const { data: officeHours = [] } = useQuery<OfficeHour[]>({
-    queryKey: ["/api/office-hours"],
+  const { data: availabilityRows = [] } = useQuery<AvailabilityRow[]>({
+    queryKey: ["/api/availability", selectedDayName],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/availability?dayOfWeek=${selectedDayName}`);
+      return res.json();
+    },
+    enabled: !!selectedDayName,
   });
-
-  const matchingOfficeHours = officeHours.filter(oh => oh.dayOfWeek === selectedDayName);
 
   const getInstructor = (id: number) => instructors.find(i => i.id === id);
 
@@ -99,9 +230,7 @@ export default function Planner() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return apiRequest("DELETE", `/api/planned-meetings/${id}`);
-    },
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/planned-meetings/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-meetings", selectedDateStr] });
       toast({ title: "Removed", description: "Meeting removed from plan." });
@@ -109,28 +238,69 @@ export default function Planner() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      return apiRequest("PUT", `/api/planned-meetings/${id}`, { status });
-    },
+    mutationFn: async ({ id, status }: { id: number; status: string }) =>
+      apiRequest("PUT", `/api/planned-meetings/${id}`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/planned-meetings", selectedDateStr] });
     },
   });
 
+  const meetingsByInstructor = useMemo(() => {
+    const map = new Map<number, PlannedMeeting[]>();
+    meetings.forEach(m => {
+      if (!map.has(m.instructorId)) map.set(m.instructorId, []);
+      map.get(m.instructorId)!.push(m);
+    });
+    return map;
+  }, [meetings]);
+
+  const plannerRows = useMemo(() => {
+    const instructorIds = new Set<number>();
+    const rows: {
+      instructor: Instructor;
+      officeHours: OfficeHour[];
+      lectures: LectureBlock[];
+      meetings: PlannedMeeting[];
+    }[] = [];
+
+    availabilityRows.forEach(ar => {
+      instructorIds.add(ar.instructor.id);
+      rows.push({
+        instructor: ar.instructor,
+        officeHours: ar.officeHours,
+        lectures: ar.lectures,
+        meetings: meetingsByInstructor.get(ar.instructor.id) || [],
+      });
+    });
+
+    meetingsByInstructor.forEach((mList, instId) => {
+      if (!instructorIds.has(instId)) {
+        const inst = getInstructor(instId);
+        if (inst) {
+          rows.push({
+            instructor: inst,
+            officeHours: [],
+            lectures: [],
+            meetings: mList,
+          });
+        }
+      }
+    });
+
+    return rows;
+  }, [availabilityRows, meetingsByInstructor, instructors]);
+
   const sortedMeetings = [...meetings].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-  const prefillFromOfficeHour = (oh: OfficeHour) => {
-    const instructor = getInstructor(oh.instructorId);
-    form.reset({
-      instructorId: oh.instructorId,
-      startTime: oh.startTime.slice(0, 5),
-      endTime: oh.endTime.slice(0, 5),
-      location: oh.location || instructor?.officeLocation || "",
-      purpose: "",
-      notes: "",
-    });
-    setDialogOpen(true);
-  };
+  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i);
+
+  const nowMinutes = useMemo(() => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  }, []);
+
+  const isToday = date ? format(date, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd") : false;
+  const nowPosition = isToday ? minutesToPosition(nowMinutes) : -1;
 
   return (
     <Layout>
@@ -159,10 +329,7 @@ export default function Planner() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Instructor</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value ? String(field.value) : ""}
-                      >
+                      <Select onValueChange={field.onChange} value={field.value ? String(field.value) : ""}>
                         <FormControl>
                           <SelectTrigger data-testid="select-meeting-instructor">
                             <SelectValue placeholder="Select instructor" />
@@ -180,7 +347,6 @@ export default function Planner() {
                     </FormItem>
                   )}
                 />
-
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -188,9 +354,7 @@ export default function Planner() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Start Time</FormLabel>
-                        <FormControl>
-                          <Input type="time" {...field} data-testid="input-meeting-start" />
-                        </FormControl>
+                        <FormControl><Input type="time" {...field} data-testid="input-meeting-start" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -201,57 +365,45 @@ export default function Planner() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>End Time</FormLabel>
-                        <FormControl>
-                          <Input type="time" {...field} data-testid="input-meeting-end" />
-                        </FormControl>
+                        <FormControl><Input type="time" {...field} data-testid="input-meeting-end" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-
                 <FormField
                   control={form.control}
                   name="location"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Location</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Building, room, or virtual link" {...field} data-testid="input-meeting-location" />
-                      </FormControl>
+                      <FormControl><Input placeholder="Building, room, or virtual link" {...field} data-testid="input-meeting-location" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
                 <FormField
                   control={form.control}
                   name="purpose"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Purpose</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Discuss textbook adoption" {...field} data-testid="input-meeting-purpose" />
-                      </FormControl>
+                      <FormControl><Input placeholder="e.g. Discuss textbook adoption" {...field} data-testid="input-meeting-purpose" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
                 <FormField
                   control={form.control}
                   name="notes"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Notes</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Any prep notes..." {...field} data-testid="input-meeting-notes" />
-                      </FormControl>
+                      <FormControl><Textarea placeholder="Any prep notes..." {...field} data-testid="input-meeting-notes" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-meeting">
                   {createMutation.isPending ? "Adding..." : "Add to Day Plan"}
                 </Button>
@@ -261,7 +413,7 @@ export default function Planner() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         <div className="space-y-4">
           <Card>
             <CardContent className="p-4">
@@ -274,114 +426,54 @@ export default function Planner() {
             </CardContent>
           </Card>
 
-          {matchingOfficeHours.length > 0 && (
+          {sortedMeetings.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                   <CalendarDays className="w-4 h-4" />
-                  Office Hours on {selectedDayName}
+                  Meetings ({sortedMeetings.length})
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {matchingOfficeHours.map((oh) => {
-                  const inst = getInstructor(oh.instructorId);
+                {sortedMeetings.map((meeting) => {
+                  const inst = getInstructor(meeting.instructorId);
                   return (
-                    <div
-                      key={oh.id}
-                      className="flex items-center justify-between gap-2 p-2 rounded-md hover-elevate cursor-pointer"
-                      onClick={() => prefillFromOfficeHour(oh)}
-                      data-testid={`office-hour-${oh.id}`}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{inst?.name || "Unknown"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {oh.startTime.slice(0, 5)} – {oh.endTime.slice(0, 5)}
-                          {oh.location ? ` · ${oh.location}` : ""}
-                        </p>
-                      </div>
-                      <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); prefillFromOfficeHour(oh); }}>
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        <div className="lg:col-span-2 space-y-4">
-          <h3 className="font-semibold text-lg">
-            Day Plan — {date ? format(date, "EEEE, MMMM d, yyyy") : "Select a date"}
-          </h3>
-
-          {meetingsLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
-          ) : sortedMeetings.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <CalendarDays className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
-                <p className="font-medium text-muted-foreground" data-testid="text-no-meetings">No meetings planned</p>
-                <p className="text-sm text-muted-foreground/70 mt-1">
-                  Click "Add Meeting" or pick from office hours on the left.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {sortedMeetings.map((meeting) => {
-                const inst = getInstructor(meeting.instructorId);
-                return (
-                  <Card key={meeting.id} data-testid={`meeting-card-${meeting.id}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold" data-testid={`text-meeting-instructor-${meeting.id}`}>
-                              {inst?.name || "Unknown Instructor"}
+                    <div key={meeting.id} className="p-2 rounded-md border" data-testid={`meeting-card-${meeting.id}`}>
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium text-sm truncate" data-testid={`text-meeting-instructor-${meeting.id}`}>
+                              {inst?.name || "Unknown"}
                             </span>
-                            <Badge
-                              variant="secondary"
-                              className={STATUS_COLORS[meeting.status || "planned"] || ""}
-                              data-testid={`badge-meeting-status-${meeting.id}`}
-                            >
+                            <Badge variant="secondary" className={`text-[10px] py-0 ${STATUS_COLORS[meeting.status || "planned"] || ""}`}>
                               {meeting.status || "planned"}
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5" />
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
+                            <span className="flex items-center gap-0.5">
+                              <Clock className="w-3 h-3" />
                               {meeting.startTime.slice(0, 5)} – {meeting.endTime.slice(0, 5)}
                             </span>
                             {meeting.location && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-3.5 h-3.5" />
+                              <span className="flex items-center gap-0.5">
+                                <MapPin className="w-3 h-3" />
                                 {meeting.location}
-                              </span>
-                            )}
-                            {inst?.department && (
-                              <span className="flex items-center gap-1">
-                                <User className="w-3.5 h-3.5" />
-                                {inst.department}
                               </span>
                             )}
                           </div>
                           {meeting.purpose && (
-                            <p className="text-sm mt-1">{meeting.purpose}</p>
-                          )}
-                          {meeting.notes && (
-                            <p className="text-sm text-muted-foreground mt-1">{meeting.notes}</p>
+                            <p className="text-xs mt-0.5 text-muted-foreground">{meeting.purpose}</p>
                           )}
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-0.5 shrink-0">
                           {meeting.status !== "completed" && (
                             <Button
-                              size="sm"
+                              size="icon"
                               variant="ghost"
                               onClick={() => updateStatusMutation.mutate({ id: meeting.id, status: "completed" })}
                               data-testid={`button-complete-meeting-${meeting.id}`}
                             >
-                              Done
+                              <Check className="w-3.5 h-3.5" />
                             </Button>
                           )}
                           <Button
@@ -390,16 +482,169 @@ export default function Planner() {
                             onClick={() => deleteMutation.mutate(meeting.id)}
                             data-testid={`button-delete-meeting-${meeting.id}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
           )}
+        </div>
+
+        <div className="xl:col-span-3 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <h3 className="font-semibold text-lg">
+              Day Plan — {date ? format(date, "EEEE, MMMM d, yyyy") : "Select a date"}
+            </h3>
+            <div className="flex items-center gap-4 text-xs flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm bg-purple-500/25 border border-purple-400/60" />
+                <span className="text-muted-foreground">Your Meeting</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm bg-emerald-500/20 border border-emerald-400/50" />
+                <span className="text-muted-foreground">Office Hours</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm bg-blue-500/20 border border-blue-400/50" />
+                <span className="text-muted-foreground">Lecture</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm bg-amber-400/15 border border-amber-300/40" />
+                <span className="text-muted-foreground">Likely Available</span>
+              </div>
+            </div>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              {meetingsLoading ? (
+                <div className="flex items-center justify-center py-20 text-muted-foreground">Loading...</div>
+              ) : plannerRows.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                  <CalendarDays className="w-10 h-10 mb-3 opacity-40" />
+                  <p className="font-medium" data-testid="text-no-meetings">No meetings planned</p>
+                  <p className="text-sm mt-1">Click "Add Meeting" to schedule your day.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <div className="min-w-[800px]">
+                    <div className="flex border-b bg-muted/30">
+                      <div className="w-52 shrink-0 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r">
+                        Instructor
+                      </div>
+                      <div className="flex-1 relative">
+                        <div className="flex">
+                          {hours.map(h => {
+                            const label = h > 12 ? `${h - 12}p` : h === 12 ? "12p" : `${h}a`;
+                            return (
+                              <div key={h} className="flex-1 text-center text-[10px] text-muted-foreground py-2 border-r border-dashed border-muted-foreground/15 last:border-r-0">
+                                {label}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {plannerRows.map((row) => {
+                      const availWindows = computeAvailableWindows(row.officeHours, row.lectures);
+
+                      return (
+                        <div
+                          key={row.instructor.id}
+                          className="flex border-b last:border-b-0 hover-elevate"
+                          data-testid={`planner-row-${row.instructor.id}`}
+                        >
+                          <div className="w-52 shrink-0 px-4 py-3 border-r flex flex-col justify-center">
+                            <p className="font-medium text-sm truncate">{row.instructor.name}</p>
+                            {row.instructor.department && (
+                              <span className="text-[11px] text-muted-foreground truncate block">{row.instructor.department}</span>
+                            )}
+                            {row.instructor.officeLocation && (
+                              <div className="flex items-center gap-0.5 mt-0.5">
+                                <MapPin className="w-2.5 h-2.5 text-muted-foreground" />
+                                <span className="text-[10px] text-muted-foreground truncate">{row.instructor.officeLocation}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex-1 relative h-16">
+                            {hours.map(h => (
+                              <div
+                                key={h}
+                                className="absolute top-0 bottom-0 border-r border-dashed border-muted-foreground/10"
+                                style={{ left: `${((h - HOUR_START) / TOTAL_HOURS) * 100}%` }}
+                              />
+                            ))}
+
+                            {availWindows.map((w, i) => (
+                              <TimeBlock
+                                key={`avail-${i}`}
+                                startMin={w.start}
+                                endMin={w.end}
+                                color="bg-amber-400/15 text-amber-800"
+                                label="Likely in office"
+                                variant="available"
+                              />
+                            ))}
+
+                            {row.officeHours.map(oh => (
+                              <TimeBlock
+                                key={`oh-${oh.id}`}
+                                startMin={timeToMinutes(oh.startTime)}
+                                endMin={timeToMinutes(oh.endTime)}
+                                color="bg-emerald-500/20 text-emerald-800"
+                                label="Office Hours"
+                                sublabel={`${formatTime(oh.startTime)} - ${formatTime(oh.endTime)}${oh.location ? ` · ${oh.location}` : ""}`}
+                                variant="office"
+                              />
+                            ))}
+
+                            {row.lectures.map(lec => (
+                              <TimeBlock
+                                key={`lec-${lec.id}`}
+                                startMin={timeToMinutes(lec.startTime)}
+                                endMin={timeToMinutes(lec.endTime)}
+                                color="bg-blue-500/20 text-blue-800"
+                                label={lec.code}
+                                sublabel={`${lec.name} · ${formatTime(lec.startTime)} - ${formatTime(lec.endTime)}${lec.building ? ` · ${lec.building}` : ""}${lec.room ? ` ${lec.room}` : ""}`}
+                                variant="lecture"
+                              />
+                            ))}
+
+                            {row.meetings.map(m => (
+                              <TimeBlock
+                                key={`meeting-${m.id}`}
+                                startMin={timeToMinutes(m.startTime)}
+                                endMin={timeToMinutes(m.endTime)}
+                                color={m.status === "completed" ? "bg-green-500/25 text-green-800" : "bg-purple-500/25 text-purple-800"}
+                                label={m.purpose || "Meeting"}
+                                sublabel={`${formatTime(m.startTime)} - ${formatTime(m.endTime)}${m.location ? ` · ${m.location}` : ""}${m.status === "completed" ? " (Done)" : ""}`}
+                                variant="meeting"
+                              />
+                            ))}
+
+                            {isToday && nowPosition >= 0 && nowPosition <= 100 && (
+                              <div
+                                className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
+                                style={{ left: `${nowPosition}%` }}
+                              >
+                                <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </Layout>

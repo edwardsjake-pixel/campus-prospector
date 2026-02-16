@@ -1,13 +1,22 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Clock, MapPin, User, BookOpen, Filter } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { MapPin, User, Filter, Plus, CalendarPlus } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { format } from "date-fns";
 import type { Instructor, OfficeHour } from "@shared/schema";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -67,7 +76,7 @@ function computeAvailableWindows(
   bufferMinutes: number = 30
 ): { start: number; end: number }[] {
   const windows: { start: number; end: number }[] = [];
-  
+
   for (const oh of officeHours) {
     windows.push({ start: timeToMinutes(oh.startTime), end: timeToMinutes(oh.endTime) });
   }
@@ -108,7 +117,7 @@ function TimeBlock({
   color: string;
   label: string;
   sublabel?: string;
-  variant: "office" | "lecture" | "available";
+  variant: "office" | "lecture" | "available" | "meeting";
 }) {
   const left = minutesToPosition(startMin);
   const width = minutesToWidth(startMin, endMin);
@@ -118,6 +127,8 @@ function TimeBlock({
     ? "border-emerald-400/50"
     : variant === "lecture"
     ? "border-blue-400/50"
+    : variant === "meeting"
+    ? "border-purple-400/50"
     : "border-amber-300/40";
 
   return (
@@ -143,10 +154,27 @@ function TimeBlock({
   );
 }
 
+const addToPlanSchema = z.object({
+  startTime: z.string().min(1, "Required"),
+  endTime: z.string().min(1, "Required"),
+  location: z.string().optional(),
+  purpose: z.string().optional(),
+  notes: z.string().optional(),
+}).refine(data => data.endTime > data.startTime, {
+  message: "End time must be after start time",
+  path: ["endTime"],
+});
+
 export default function Availability() {
   const todayDay = getTodayDayName();
   const [selectedDay, setSelectedDay] = useState(todayDay);
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [selectedInstructor, setSelectedInstructor] = useState<Instructor | null>(null);
+  const [prefillTime, setPrefillTime] = useState<{ start: string; end: string; location: string } | null>(null);
+  const { toast } = useToast();
+
+  const todayDateStr = format(new Date(), "yyyy-MM-dd");
 
   const { data: rows = [], isLoading } = useQuery<AvailabilityRow[]>({
     queryKey: ["/api/availability", selectedDay],
@@ -156,6 +184,53 @@ export default function Availability() {
     },
     enabled: !!selectedDay,
   });
+
+  const form = useForm<z.infer<typeof addToPlanSchema>>({
+    resolver: zodResolver(addToPlanSchema),
+    defaultValues: {
+      startTime: "09:00",
+      endTime: "10:00",
+      location: "",
+      purpose: "",
+      notes: "",
+    },
+  });
+
+  const createMeetingMutation = useMutation({
+    mutationFn: async (values: z.infer<typeof addToPlanSchema>) => {
+      return apiRequest("POST", "/api/planned-meetings", {
+        ...values,
+        instructorId: selectedInstructor!.id,
+        date: todayDateStr,
+        status: "planned",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/planned-meetings"] });
+      setAddDialogOpen(false);
+      form.reset();
+      toast({ title: "Added to plan", description: `Meeting with ${selectedInstructor?.name} added to today's plan.` });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to add meeting.", variant: "destructive" });
+    },
+  });
+
+  const openAddDialog = (instructor: Instructor, row: AvailabilityRow) => {
+    setSelectedInstructor(instructor);
+    const firstOH = row.officeHours[0];
+    const defaultStart = firstOH ? firstOH.startTime.slice(0, 5) : "09:00";
+    const defaultEnd = firstOH ? firstOH.endTime.slice(0, 5) : "10:00";
+    const defaultLocation = firstOH?.location || instructor.officeLocation || "";
+    form.reset({
+      startTime: defaultStart,
+      endTime: defaultEnd,
+      location: defaultLocation,
+      purpose: "",
+      notes: "",
+    });
+    setAddDialogOpen(true);
+  };
 
   const departments = useMemo(() => {
     const depts = new Set<string>();
@@ -251,7 +326,7 @@ export default function Availability() {
               <div className="overflow-x-auto">
                 <div className="min-w-[900px]">
                   <div className="flex border-b bg-muted/30">
-                    <div className="w-52 shrink-0 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r">
+                    <div className="w-56 shrink-0 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r">
                       Instructor
                     </div>
                     <div className="flex-1 relative">
@@ -280,23 +355,34 @@ export default function Availability() {
                         className="flex border-b last:border-b-0 hover-elevate"
                         data-testid={`row-instructor-${row.instructor.id}`}
                       >
-                        <div className="w-52 shrink-0 px-4 py-3 border-r flex flex-col justify-center">
-                          <p className="font-medium text-sm truncate" data-testid={`text-instructor-name-${row.instructor.id}`}>
-                            {row.instructor.name}
-                          </p>
-                          <div className="flex items-center gap-2 mt-0.5">
+                        <div className="w-56 shrink-0 px-4 py-3 border-r flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate" data-testid={`text-instructor-name-${row.instructor.id}`}>
+                              {row.instructor.name}
+                            </p>
                             {row.instructor.department && (
-                              <span className="text-[11px] text-muted-foreground truncate">{row.instructor.department}</span>
+                              <span className="text-[11px] text-muted-foreground truncate block">{row.instructor.department}</span>
                             )}
-                          </div>
-                          <div className="flex items-center gap-1 mt-1 flex-wrap">
                             {row.instructor.officeLocation && (
-                              <Badge variant="secondary" className="text-[10px] py-0">
-                                <MapPin className="w-2.5 h-2.5 mr-0.5" />
-                                {row.instructor.officeLocation}
-                              </Badge>
+                              <div className="flex items-center gap-0.5 mt-0.5">
+                                <MapPin className="w-2.5 h-2.5 text-muted-foreground" />
+                                <span className="text-[10px] text-muted-foreground truncate">{row.instructor.officeLocation}</span>
+                              </div>
                             )}
                           </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => openAddDialog(row.instructor, row)}
+                                data-testid={`button-add-to-plan-${row.instructor.id}`}
+                              >
+                                <CalendarPlus className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Add to daily plan</TooltipContent>
+                          </Tooltip>
                         </div>
 
                         <div className="flex-1 relative h-16">
@@ -361,6 +447,89 @@ export default function Availability() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add {selectedInstructor?.name} to Today's Plan</DialogTitle>
+            <DialogDescription>Schedule a meeting for {format(new Date(), "EEEE, MMMM d")}.</DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit((v) => createMeetingMutation.mutate(v))} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="startTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Time</FormLabel>
+                      <FormControl>
+                        <Input type="time" {...field} data-testid="input-plan-start" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="endTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Time</FormLabel>
+                      <FormControl>
+                        <Input type="time" {...field} data-testid="input-plan-end" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Building, room, or virtual link" {...field} data-testid="input-plan-location" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="purpose"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Purpose</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Discuss textbook adoption" {...field} data-testid="input-plan-purpose" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Any prep notes..." {...field} data-testid="input-plan-notes" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" className="w-full" disabled={createMeetingMutation.isPending} data-testid="button-submit-plan">
+                {createMeetingMutation.isPending ? "Adding..." : "Add to Daily Plan"}
+              </Button>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
