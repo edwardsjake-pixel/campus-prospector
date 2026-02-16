@@ -169,6 +169,43 @@ export async function registerRoutes(
     }
   });
 
+  // === Availability (Gantt view) ===
+  app.get(api.availability.list.path, async (req, res) => {
+    const dayOfWeek = req.query.dayOfWeek as string;
+    if (!dayOfWeek) return res.status(400).json({ message: "dayOfWeek is required" });
+
+    const allInstructors = await storage.getInstructors();
+    const allOfficeHours = await storage.getOfficeHours();
+    const allCourses = await storage.getCourses();
+
+    const result = allInstructors.map(instructor => {
+      const oh = allOfficeHours.filter(
+        o => o.instructorId === instructor.id && o.dayOfWeek === dayOfWeek
+      );
+      const lectures = allCourses.filter(
+        c => c.instructorId === instructor.id &&
+          c.daysOfWeek && c.daysOfWeek.split(",").map(d => d.trim()).includes(dayOfWeek) &&
+          c.lectureStartTime && c.lectureEndTime
+      );
+      if (oh.length === 0 && lectures.length === 0) return null;
+      return {
+        instructor,
+        officeHours: oh,
+        lectures: lectures.map(l => ({
+          id: l.id,
+          code: l.code,
+          name: l.name,
+          startTime: l.lectureStartTime,
+          endTime: l.lectureEndTime,
+          building: l.building,
+          room: l.room,
+        })),
+      };
+    }).filter(Boolean);
+
+    res.json(result);
+  });
+
   // === CSV Import ===
   app.post(api.import.instructors.path, async (req, res) => {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
@@ -244,6 +281,11 @@ export async function registerRoutes(
       format: "in-person",
       enrollment: 150,
       instructorId: i1.id,
+      daysOfWeek: "Monday,Wednesday,Friday",
+      lectureStartTime: "09:00",
+      lectureEndTime: "10:00",
+      building: "Science Hall",
+      room: "200",
     });
     await storage.createCourse({
       code: "BOT201",
@@ -252,6 +294,11 @@ export async function registerRoutes(
       format: "hybrid",
       enrollment: 45,
       instructorId: i2.id,
+      daysOfWeek: "Tuesday,Thursday",
+      lectureStartTime: "13:00",
+      lectureEndTime: "14:30",
+      building: "Greenhouse",
+      room: "A1",
     });
 
     await storage.createOfficeHour({

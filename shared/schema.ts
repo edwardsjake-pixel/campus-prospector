@@ -26,6 +26,11 @@ export const courses = pgTable("courses", {
   format: text("format").notNull(), // online, in-person, hybrid
   enrollment: integer("enrollment").default(0),
   instructorId: integer("instructor_id").references(() => instructors.id),
+  daysOfWeek: text("days_of_week"), // comma-separated: "Monday,Wednesday,Friday"
+  lectureStartTime: time("lecture_start_time"),
+  lectureEndTime: time("lecture_end_time"),
+  building: text("building"),
+  room: text("room"),
 });
 
 export const officeHours = pgTable("office_hours", {

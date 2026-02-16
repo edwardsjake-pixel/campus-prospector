@@ -11,6 +11,7 @@ import Instructors from "@/pages/instructors";
 import Courses from "@/pages/courses";
 import Visits from "@/pages/visits";
 import Planner from "@/pages/planner";
+import Availability from "@/pages/availability";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
@@ -52,6 +53,9 @@ function Router() {
       </Route>
       <Route path="/planner">
         {() => <ProtectedRoute component={Planner} />}
+      </Route>
+      <Route path="/availability">
+        {() => <ProtectedRoute component={Availability} />}
       </Route>
       
       <Route component={NotFound} />

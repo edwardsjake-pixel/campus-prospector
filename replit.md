@@ -45,7 +45,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Database Tables
 - `instructors` — Name, email, department, office location, bio, notes, target priority
-- `courses` — Code, name, term, format, enrollment, linked to instructor
+- `courses` — Code, name, term, format, enrollment, linked to instructor; also stores lecture schedule (daysOfWeek, lectureStartTime, lectureEndTime, building, room)
 - `office_hours` — Day of week, start/end time, location, virtual flag, linked to instructor
 - `visits` — Date, location, notes, linked to user (sales rep)
 - `visit_interactions` — Interactions during visits (linked to visits)

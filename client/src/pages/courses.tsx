@@ -55,7 +55,14 @@ export default function Courses() {
   const formSchema = insertCourseSchema.extend({
     enrollment: z.coerce.number().default(0),
     instructorId: z.coerce.number().optional().nullable(),
+    daysOfWeek: z.string().optional().nullable(),
+    lectureStartTime: z.string().optional().nullable(),
+    lectureEndTime: z.string().optional().nullable(),
+    building: z.string().optional().nullable(),
+    room: z.string().optional().nullable(),
   });
+
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -65,14 +72,28 @@ export default function Courses() {
       term: "Fall 2024",
       format: "in-person",
       enrollment: 0,
+      daysOfWeek: "",
+      lectureStartTime: "",
+      lectureEndTime: "",
+      building: "",
+      room: "",
     },
   });
 
   const onSubmit = (data: z.infer<typeof formSchema>) => {
-    createCourse.mutate(data, {
+    const submitData = {
+      ...data,
+      daysOfWeek: selectedDays.length > 0 ? selectedDays.join(",") : null,
+      lectureStartTime: data.lectureStartTime || null,
+      lectureEndTime: data.lectureEndTime || null,
+      building: data.building || null,
+      room: data.room || null,
+    };
+    createCourse.mutate(submitData, {
       onSuccess: () => {
         setIsDialogOpen(false);
         form.reset();
+        setSelectedDays([]);
       },
     });
   };
@@ -201,6 +222,80 @@ export default function Courses() {
                   )}
                 />
 
+                <div className="border-t pt-4 mt-2">
+                  <Label className="text-sm font-semibold mb-3 block">Lecture Schedule (optional)</Label>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {["Monday","Tuesday","Wednesday","Thursday","Friday"].map(day => {
+                      const abbr = day.slice(0, 3);
+                      const checked = selectedDays.includes(day);
+                      return (
+                        <Button
+                          key={day}
+                          type="button"
+                          variant={checked ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setSelectedDays(prev =>
+                              prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+                            );
+                          }}
+                          data-testid={`button-day-${abbr.toLowerCase()}`}
+                        >
+                          {abbr}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="lectureStartTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <Label>Start Time</Label>
+                          <FormControl><Input type="time" {...field} value={field.value || ""} data-testid="input-lecture-start" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lectureEndTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <Label>End Time</Label>
+                          <FormControl><Input type="time" {...field} value={field.value || ""} data-testid="input-lecture-end" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <FormField
+                      control={form.control}
+                      name="building"
+                      render={({ field }) => (
+                        <FormItem>
+                          <Label>Building</Label>
+                          <FormControl><Input placeholder="Science Hall" {...field} value={field.value || ""} data-testid="input-building" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="room"
+                      render={({ field }) => (
+                        <FormItem>
+                          <Label>Room</Label>
+                          <FormControl><Input placeholder="200" {...field} value={field.value || ""} data-testid="input-room" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
                 <div className="flex justify-end gap-2 pt-2">
                   <Button type="button" variant="ghost" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                   <Button type="submit" disabled={createCourse.isPending}>
@@ -232,6 +327,7 @@ export default function Courses() {
                 <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Format</TableHead>
+                <TableHead>Schedule</TableHead>
                 <TableHead>Enrollment</TableHead>
                 <TableHead>Instructor</TableHead>
                 <TableHead className="text-right">Term</TableHead>
@@ -240,11 +336,11 @@ export default function Courses() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading courses...</TableCell>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Loading courses...</TableCell>
                 </TableRow>
               ) : filteredCourses?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No courses found.</TableCell>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No courses found.</TableCell>
                 </TableRow>
               ) : (
                 filteredCourses?.map((course) => (
@@ -264,6 +360,25 @@ export default function Courses() {
                         )}
                         <span className="capitalize text-sm">{course.format}</span>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {course.daysOfWeek ? (
+                        <div className="text-xs text-slate-600">
+                          <span className="font-medium">{course.daysOfWeek.split(",").map((d: string) => d.trim().slice(0, 3)).join("/")}</span>
+                          {course.lectureStartTime && course.lectureEndTime && (
+                            <span className="text-muted-foreground ml-1">
+                              {course.lectureStartTime.slice(0, 5)}-{course.lectureEndTime.slice(0, 5)}
+                            </span>
+                          )}
+                          {course.building && (
+                            <span className="text-muted-foreground ml-1">
+                              {course.building}{course.room ? ` ${course.room}` : ""}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">--</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant={course.enrollment && course.enrollment > 100 ? "default" : "secondary"}>

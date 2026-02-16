@@ -168,6 +168,15 @@ export const api = {
       },
     },
   },
+  availability: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/availability' as const,
+      responses: {
+        200: z.array(z.any()),
+      },
+    },
+  },
   import: {
     instructors: {
       method: 'POST' as const,
