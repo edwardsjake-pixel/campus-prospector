@@ -6,16 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { MapPin, User, Filter, Plus, CalendarPlus } from "lucide-react";
+import { MapPin, User, Filter, CalendarPlus } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { format } from "date-fns";
 import type { Instructor, OfficeHour } from "@shared/schema";
 
@@ -24,6 +17,7 @@ const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 const HOUR_START = 7;
 const HOUR_END = 21;
 const TOTAL_HOURS = HOUR_END - HOUR_START;
+const DEFAULT_MEETING_DURATION = 30;
 
 interface LectureBlock {
   id: number;
@@ -65,6 +59,12 @@ function formatTime(time: string): string {
   return `${display}:${m} ${ampm}`;
 }
 
+function minutesToTimeStr(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+}
+
 function getTodayDayName(): string {
   const d = new Date();
   return DAYS[d.getDay() === 0 ? 6 : d.getDay() - 1];
@@ -104,6 +104,41 @@ function computeAvailableWindows(
   return merged;
 }
 
+function findBestMeetingSlot(
+  officeHours: OfficeHour[],
+  lectures: LectureBlock[],
+  durationMinutes: number = DEFAULT_MEETING_DURATION
+): { start: number; end: number; location: string } | null {
+  if (officeHours.length > 0) {
+    const oh = officeHours[0];
+    const ohStart = timeToMinutes(oh.startTime);
+    const ohEnd = timeToMinutes(oh.endTime);
+    if (ohEnd - ohStart >= durationMinutes) {
+      return { start: ohStart, end: ohStart + durationMinutes, location: oh.location || "" };
+    }
+    return { start: ohStart, end: ohEnd, location: oh.location || "" };
+  }
+
+  const availWindows = computeAvailableWindows(officeHours, lectures);
+  for (const w of availWindows) {
+    const lectureTimes = lectures.map(l => ({
+      start: timeToMinutes(l.startTime),
+      end: timeToMinutes(l.endTime),
+    }));
+    const isLecture = lectureTimes.some(lt => lt.start === w.start && lt.end === w.end);
+    if (isLecture) continue;
+
+    if (w.end - w.start >= durationMinutes) {
+      return { start: w.start, end: w.start + durationMinutes, location: "" };
+    }
+    if (w.end - w.start > 0) {
+      return { start: w.start, end: w.end, location: "" };
+    }
+  }
+
+  return null;
+}
+
 function TimeBlock({
   startMin,
   endMin,
@@ -135,7 +170,7 @@ function TimeBlock({
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`absolute top-1 bottom-1 rounded-md border ${color} ${borderClass} flex items-center overflow-hidden cursor-default transition-opacity`}
+          className={`absolute top-0.5 bottom-0.5 rounded-md border ${color} ${borderClass} flex items-center overflow-hidden cursor-default transition-opacity`}
           style={{ left: `${left}%`, width: `${width}%`, minWidth: "2px" }}
           data-testid={`block-${variant}`}
         >
@@ -154,24 +189,10 @@ function TimeBlock({
   );
 }
 
-const addToPlanSchema = z.object({
-  startTime: z.string().min(1, "Required"),
-  endTime: z.string().min(1, "Required"),
-  location: z.string().optional(),
-  purpose: z.string().optional(),
-  notes: z.string().optional(),
-}).refine(data => data.endTime > data.startTime, {
-  message: "End time must be after start time",
-  path: ["endTime"],
-});
-
 export default function Availability() {
   const todayDay = getTodayDayName();
   const [selectedDay, setSelectedDay] = useState(todayDay);
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [selectedInstructor, setSelectedInstructor] = useState<Instructor | null>(null);
-  const [prefillTime, setPrefillTime] = useState<{ start: string; end: string; location: string } | null>(null);
   const { toast } = useToast();
 
   const todayDateStr = format(new Date(), "yyyy-MM-dd");
@@ -185,51 +206,41 @@ export default function Availability() {
     enabled: !!selectedDay,
   });
 
-  const form = useForm<z.infer<typeof addToPlanSchema>>({
-    resolver: zodResolver(addToPlanSchema),
-    defaultValues: {
-      startTime: "09:00",
-      endTime: "10:00",
-      location: "",
-      purpose: "",
-      notes: "",
-    },
-  });
-
-  const createMeetingMutation = useMutation({
-    mutationFn: async (values: z.infer<typeof addToPlanSchema>) => {
+  const quickAddMutation = useMutation({
+    mutationFn: async (payload: { instructorId: number; startTime: string; endTime: string; location: string }) => {
       return apiRequest("POST", "/api/planned-meetings", {
-        ...values,
-        instructorId: selectedInstructor!.id,
+        ...payload,
         date: todayDateStr,
         status: "planned",
+        purpose: "",
+        notes: "",
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      const inst = rows.find(r => r.instructor.id === variables.instructorId)?.instructor;
       queryClient.invalidateQueries({ queryKey: ["/api/planned-meetings"] });
-      setAddDialogOpen(false);
-      form.reset();
-      toast({ title: "Added to plan", description: `Meeting with ${selectedInstructor?.name} added to today's plan.` });
+      toast({
+        title: "Added to today's plan",
+        description: `${inst?.name || "Instructor"} at ${formatTime(variables.startTime)} – ${formatTime(variables.endTime)}`,
+      });
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to add meeting.", variant: "destructive" });
     },
   });
 
-  const openAddDialog = (instructor: Instructor, row: AvailabilityRow) => {
-    setSelectedInstructor(instructor);
-    const firstOH = row.officeHours[0];
-    const defaultStart = firstOH ? firstOH.startTime.slice(0, 5) : "09:00";
-    const defaultEnd = firstOH ? firstOH.endTime.slice(0, 5) : "10:00";
-    const defaultLocation = firstOH?.location || instructor.officeLocation || "";
-    form.reset({
-      startTime: defaultStart,
-      endTime: defaultEnd,
-      location: defaultLocation,
-      purpose: "",
-      notes: "",
+  const handleQuickAdd = (row: AvailabilityRow) => {
+    const slot = findBestMeetingSlot(row.officeHours, row.lectures);
+    if (!slot) {
+      toast({ title: "No available slot", description: "Could not find an available time for this instructor.", variant: "destructive" });
+      return;
+    }
+    quickAddMutation.mutate({
+      instructorId: row.instructor.id,
+      startTime: minutesToTimeStr(slot.start),
+      endTime: minutesToTimeStr(slot.end),
+      location: slot.location || row.instructor.officeLocation || "",
     });
-    setAddDialogOpen(true);
   };
 
   const departments = useMemo(() => {
@@ -375,13 +386,14 @@ export default function Availability() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                onClick={() => openAddDialog(row.instructor, row)}
+                                onClick={() => handleQuickAdd(row)}
+                                disabled={quickAddMutation.isPending}
                                 data-testid={`button-add-to-plan-${row.instructor.id}`}
                               >
                                 <CalendarPlus className="w-4 h-4" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Add to daily plan</TooltipContent>
+                            <TooltipContent>Add to today's plan</TooltipContent>
                           </Tooltip>
                         </div>
 
@@ -447,89 +459,6 @@ export default function Availability() {
           </CardContent>
         </Card>
       </div>
-
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add {selectedInstructor?.name} to Today's Plan</DialogTitle>
-            <DialogDescription>Schedule a meeting for {format(new Date(), "EEEE, MMMM d")}.</DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit((v) => createMeetingMutation.mutate(v))} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="startTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start Time</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} data-testid="input-plan-start" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="endTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End Time</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} data-testid="input-plan-end" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <FormField
-                control={form.control}
-                name="location"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Location</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Building, room, or virtual link" {...field} data-testid="input-plan-location" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="purpose"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Purpose</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Discuss textbook adoption" {...field} data-testid="input-plan-purpose" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Any prep notes..." {...field} data-testid="input-plan-notes" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" className="w-full" disabled={createMeetingMutation.isPending} data-testid="button-submit-plan">
-                {createMeetingMutation.isPending ? "Adding..." : "Add to Daily Plan"}
-              </Button>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
     </Layout>
   );
 }

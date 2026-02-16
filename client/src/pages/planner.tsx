@@ -17,7 +17,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Plus, Clock, MapPin, User, Trash2, CalendarDays, Check } from "lucide-react";
+import { Plus, Clock, MapPin, Trash2, CalendarDays, Check } from "lucide-react";
 import type { PlannedMeeting, Instructor, OfficeHour } from "@shared/schema";
 
 const HOUR_START = 7;
@@ -101,7 +101,6 @@ function TimeBlock({
   label,
   sublabel,
   variant,
-  onClick,
 }: {
   startMin: number;
   endMin: number;
@@ -109,7 +108,6 @@ function TimeBlock({
   label: string;
   sublabel?: string;
   variant: "office" | "lecture" | "available" | "meeting";
-  onClick?: () => void;
 }) {
   const left = minutesToPosition(startMin);
   const width = minutesToWidth(startMin, endMin);
@@ -123,16 +121,20 @@ function TimeBlock({
     ? "border-purple-400/60"
     : "border-amber-300/40";
 
-  const zClass = variant === "meeting" ? "z-[5]" : "z-[1]";
-
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`absolute top-1 bottom-1 rounded-md border ${color} ${borderClass} ${zClass} flex items-center overflow-hidden transition-opacity ${onClick ? "cursor-pointer" : "cursor-default"}`}
-          style={{ left: `${left}%`, width: `${width}%`, minWidth: "2px" }}
+          className={`absolute rounded-md border ${color} ${borderClass} flex items-center overflow-hidden cursor-default transition-opacity`}
+          style={{
+            left: `${left}%`,
+            width: `${width}%`,
+            minWidth: "2px",
+            top: variant === "meeting" ? "50%" : "2px",
+            bottom: variant === "meeting" ? "2px" : "auto",
+            height: variant === "meeting" ? "calc(50% - 4px)" : "calc(50% - 4px)",
+          }}
           data-testid={`block-${variant}`}
-          onClick={onClick}
         >
           {width > 4 && (
             <span className="text-[10px] font-medium truncate px-1 leading-tight">
@@ -527,7 +529,7 @@ export default function Planner() {
                 <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                   <CalendarDays className="w-10 h-10 mb-3 opacity-40" />
                   <p className="font-medium" data-testid="text-no-meetings">No meetings planned</p>
-                  <p className="text-sm mt-1">Click "Add Meeting" to schedule your day.</p>
+                  <p className="text-sm mt-1">Click "Add Meeting" to schedule your day, or add from Availability.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -552,6 +554,9 @@ export default function Planner() {
 
                     {plannerRows.map((row) => {
                       const availWindows = computeAvailableWindows(row.officeHours, row.lectures);
+                      const hasMeetings = row.meetings.length > 0;
+                      const hasSchedule = row.officeHours.length > 0 || row.lectures.length > 0;
+                      const rowHeight = hasMeetings && hasSchedule ? "h-20" : "h-12";
 
                       return (
                         <div
@@ -572,7 +577,7 @@ export default function Planner() {
                             )}
                           </div>
 
-                          <div className="flex-1 relative h-16">
+                          <div className={`flex-1 relative ${rowHeight}`}>
                             {hours.map(h => (
                               <div
                                 key={h}
@@ -580,6 +585,13 @@ export default function Planner() {
                                 style={{ left: `${((h - HOUR_START) / TOTAL_HOURS) * 100}%` }}
                               />
                             ))}
+
+                            {hasMeetings && hasSchedule && (
+                              <div
+                                className="absolute left-0 right-0 border-b border-dashed border-muted-foreground/15"
+                                style={{ top: "50%" }}
+                              />
+                            )}
 
                             {availWindows.map((w, i) => (
                               <TimeBlock
