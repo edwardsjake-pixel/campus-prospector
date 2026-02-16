@@ -267,6 +267,8 @@ export async function registerRoutes(
       }
       const parsed = rows.map((row: any) => {
         const courseName = row.largestCourse || row.largest_course || null;
+        const enrollmentRaw = row.enrollment || row.enrolled || null;
+        const enrollment = enrollmentRaw ? parseInt(String(enrollmentRaw).replace(/[^0-9]/g, ""), 10) : 0;
         return {
           instructor: {
             name: String(row.name || "").trim(),
@@ -279,6 +281,7 @@ export async function registerRoutes(
             targetPriority: row.targetPriority || row.target_priority || "medium",
           },
           courseName: courseName ? String(courseName).trim() : null,
+          enrollment: isNaN(enrollment) ? 0 : enrollment,
         };
       }).filter(p => p.instructor.name.length > 0);
       const items = parsed.map(p => p.instructor);
@@ -299,7 +302,7 @@ export async function registerRoutes(
               name: cName,
               term: "Current",
               format: "in-person",
-              enrollment: 0,
+              enrollment: parsed[i].enrollment || 0,
               instructorId: instructor.id,
             });
             coursesCreated++;

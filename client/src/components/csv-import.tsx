@@ -21,6 +21,7 @@ const INSTRUCTOR_FIELDS = [
   { key: "department", label: "Department" },
   { key: "officeLocation", label: "Office Location" },
   { key: "largestCourse", label: "Largest Course" },
+  { key: "enrollment", label: "Enrollment" },
   { key: "bio", label: "Bio" },
   { key: "notes", label: "Notes" },
   { key: "targetPriority", label: "Priority (low/medium/high)" },
@@ -121,8 +122,10 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
       setCsvData(parsed);
       const autoMap: Record<string, string> = {};
       const synonyms: Record<string, string[]> = {
-        institution: ["school", "university", "college", "campus"],
-        officeLocation: ["office", "location", "room"],
+        institution: ["school", "university", "college", "campus", "institution"],
+        officeLocation: ["office", "location", "room", "officelocation"],
+        largestCourse: ["course", "class", "section", "largestcourse", "largestclass", "largestsection", "lgstcrs", "lgstcourse"],
+        enrollment: ["enrollment", "enrolled", "students", "classsize", "sectionsize", "size"],
       };
       fields.forEach(f => {
         const normalizedKey = f.key.toLowerCase().replace(/[_\s]/g, "");
