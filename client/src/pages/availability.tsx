@@ -175,7 +175,7 @@ function TimeBlock({
           data-testid={`block-${variant}`}
         >
           {width > 4 && (
-            <span className="text-[10px] font-medium truncate px-1 leading-tight">
+            <span className="text-[10px] font-semibold truncate px-1.5 leading-tight drop-shadow-sm">
               {label}
             </span>
           )}
@@ -411,7 +411,7 @@ export default function Availability() {
                               key={`avail-${i}`}
                               startMin={w.start}
                               endMin={w.end}
-                              color="bg-amber-400/15 text-amber-800"
+                              color="bg-amber-400/25 text-amber-900 dark:text-amber-100"
                               label="Likely in office"
                               variant="available"
                             />
@@ -422,7 +422,7 @@ export default function Availability() {
                               key={`oh-${oh.id}`}
                               startMin={timeToMinutes(oh.startTime)}
                               endMin={timeToMinutes(oh.endTime)}
-                              color="bg-emerald-500/20 text-emerald-800"
+                              color="bg-emerald-500/30 text-emerald-900 dark:text-emerald-100"
                               label="Office Hours"
                               sublabel={`${formatTime(oh.startTime)} - ${formatTime(oh.endTime)}${oh.location ? ` · ${oh.location}` : ""}`}
                               variant="office"
@@ -434,7 +434,7 @@ export default function Availability() {
                               key={`lec-${lec.id}`}
                               startMin={timeToMinutes(lec.startTime)}
                               endMin={timeToMinutes(lec.endTime)}
-                              color="bg-blue-500/20 text-blue-800"
+                              color="bg-blue-500/30 text-blue-900 dark:text-blue-100"
                               label={lec.code}
                               sublabel={`${lec.name} · ${formatTime(lec.startTime)} - ${formatTime(lec.endTime)}${lec.building ? ` · ${lec.building}` : ""}${lec.room ? ` ${lec.room}` : ""}`}
                               variant="lecture"

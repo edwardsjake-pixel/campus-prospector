@@ -50,7 +50,8 @@ export interface IStorage {
   deletePlannedMeeting(id: number): Promise<void>;
 
   // Bulk operations
-  bulkCreateInstructors(items: InsertInstructor[]): Promise<Instructor[]>;
+  getInstructorByName(name: string): Promise<Instructor | undefined>;
+  bulkCreateInstructors(items: InsertInstructor[]): Promise<{ created: Instructor[]; existing: Instructor[]; skippedCount: number }>;
   bulkCreateCourses(items: InsertCourse[]): Promise<Course[]>;
 }
 
@@ -82,6 +83,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInstructor(instructor: InsertInstructor): Promise<Instructor> {
+    const existing = await this.getInstructorByName(instructor.name);
+    if (existing) {
+      return existing;
+    }
     const [newInstructor] = await db.insert(instructors).values(instructor).returning();
     return newInstructor;
   }
@@ -154,10 +159,36 @@ export class DatabaseStorage implements IStorage {
     await db.delete(plannedMeetings).where(eq(plannedMeetings.id, id));
   }
 
-  // Bulk operations
-  async bulkCreateInstructors(items: InsertInstructor[]): Promise<Instructor[]> {
-    if (items.length === 0) return [];
-    return await db.insert(instructors).values(items).returning();
+  async getInstructorByName(name: string): Promise<Instructor | undefined> {
+    const [instructor] = await db.select().from(instructors).where(eq(instructors.name, name));
+    return instructor;
+  }
+
+  async bulkCreateInstructors(items: InsertInstructor[]): Promise<{ created: Instructor[]; existing: Instructor[]; skippedCount: number }> {
+    if (items.length === 0) return { created: [], existing: [], skippedCount: 0 };
+
+    const allExisting = await db.select().from(instructors);
+    const existingNames = new Set(allExisting.map(i => i.name.toLowerCase().trim()));
+
+    const toCreate: InsertInstructor[] = [];
+    const alreadyExisting: Instructor[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const normalizedName = items[i].name.toLowerCase().trim();
+      const match = allExisting.find(e => e.name.toLowerCase().trim() === normalizedName);
+      if (match) {
+        alreadyExisting.push(match);
+      } else if (!existingNames.has(normalizedName)) {
+        toCreate.push(items[i]);
+        existingNames.add(normalizedName);
+      }
+    }
+
+    const newlyCreated = toCreate.length > 0
+      ? await db.insert(instructors).values(toCreate).returning()
+      : [];
+
+    return { created: newlyCreated, existing: alreadyExisting, skippedCount: alreadyExisting.length };
   }
 
   async bulkCreateCourses(items: InsertCourse[]): Promise<Course[]> {

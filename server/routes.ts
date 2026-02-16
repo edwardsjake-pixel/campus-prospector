@@ -231,26 +231,32 @@ export async function registerRoutes(
       }).filter(p => p.instructor.name.length > 0);
       const items = parsed.map(p => p.instructor);
       const courseNames = parsed.map(p => p.courseName);
-      const created = await storage.bulkCreateInstructors(items);
+      const result = await storage.bulkCreateInstructors(items);
 
       let coursesCreated = 0;
-      for (let i = 0; i < created.length; i++) {
-        const cName = courseNames[i];
+      const allInstructors = [...result.created, ...result.existing];
+      for (let i = 0; i < parsed.length; i++) {
+        const cName = parsed[i].courseName;
         if (cName && cName.length > 0) {
-          const code = cName.split(/\s+/).slice(0, 2).join(" ").substring(0, 20);
-          await storage.createCourse({
-            code: code,
-            name: cName,
-            term: "Current",
-            format: "in-person",
-            enrollment: 0,
-            instructorId: created[i].id,
-          });
-          coursesCreated++;
+          const normalizedName = parsed[i].instructor.name.toLowerCase().trim();
+          const instructor = allInstructors.find(inst => inst.name.toLowerCase().trim() === normalizedName);
+          if (instructor) {
+            const code = cName.split(/\s+/).slice(0, 2).join(" ").substring(0, 20);
+            await storage.createCourse({
+              code: code,
+              name: cName,
+              term: "Current",
+              format: "in-person",
+              enrollment: 0,
+              instructorId: instructor.id,
+            });
+            coursesCreated++;
+          }
         }
       }
 
-      res.json({ imported: created.length, coursesCreated });
+      const skippedMsg = result.skippedCount > 0 ? ` (${result.skippedCount} duplicates skipped)` : "";
+      res.json({ imported: result.created.length, skipped: result.skippedCount, coursesCreated });
     } catch (error) {
       res.status(400).json({ message: "Failed to import instructors" });
     }

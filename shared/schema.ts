@@ -8,7 +8,7 @@ export * from "./models/auth";
 
 export const instructors = pgTable("instructors", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   email: text("email"),
   department: text("department"),
   officeLocation: text("office_location"),
