@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,7 +17,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Plus, Clock, MapPin, Trash2, CalendarDays, Check } from "lucide-react";
+import { Plus, Clock, MapPin, Trash2, CalendarDays, Check, GripVertical } from "lucide-react";
 import type { PlannedMeeting, Instructor, OfficeHour } from "@shared/schema";
 
 const HOUR_START = 7;
@@ -174,6 +174,10 @@ const STATUS_COLORS: Record<string, string> = {
 export default function Planner() {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [rowOrder, setRowOrder] = useState<number[]>([]);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const dragCounter = useRef(0);
   const { toast } = useToast();
 
   const selectedDateStr = date ? format(date, "yyyy-MM-dd") : "";
@@ -291,6 +295,86 @@ export default function Planner() {
 
     return rows;
   }, [availabilityRows, meetingsByInstructor, instructors]);
+
+  const orderedPlannerRows = useMemo(() => {
+    if (rowOrder.length === 0) return plannerRows;
+    const rowMap = new Map(plannerRows.map(r => [r.instructor.id, r]));
+    const ordered: typeof plannerRows = [];
+    rowOrder.forEach(id => {
+      const r = rowMap.get(id);
+      if (r) {
+        ordered.push(r);
+        rowMap.delete(id);
+      }
+    });
+    rowMap.forEach(r => ordered.push(r));
+    return ordered;
+  }, [plannerRows, rowOrder]);
+
+  const saveOrder = useCallback((ids: number[]) => {
+    setRowOrder(ids);
+    if (selectedDateStr) {
+      try {
+        const stored = JSON.parse(localStorage.getItem("plannerRowOrder") || "{}");
+        stored[selectedDateStr] = ids;
+        localStorage.setItem("plannerRowOrder", JSON.stringify(stored));
+      } catch {}
+    }
+  }, [selectedDateStr]);
+
+  useEffect(() => {
+    if (!selectedDateStr) return;
+    try {
+      const stored = JSON.parse(localStorage.getItem("plannerRowOrder") || "{}");
+      const saved = stored[selectedDateStr];
+      if (Array.isArray(saved) && saved.length > 0) {
+        setRowOrder(saved);
+      } else {
+        setRowOrder([]);
+      }
+    } catch {
+      setRowOrder([]);
+    }
+  }, [selectedDateStr]);
+
+  const handleDragStart = useCallback((idx: number) => {
+    setDragIdx(idx);
+  }, []);
+
+  const handleDragEnter = useCallback((idx: number) => {
+    dragCounter.current++;
+    setDragOverIdx(idx);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    dragCounter.current--;
+    if (dragCounter.current <= 0) {
+      setDragOverIdx(null);
+      dragCounter.current = 0;
+    }
+  }, []);
+
+  const handleDrop = useCallback((dropIdx: number) => {
+    if (dragIdx === null || dragIdx === dropIdx) {
+      setDragIdx(null);
+      setDragOverIdx(null);
+      dragCounter.current = 0;
+      return;
+    }
+    const currentIds = orderedPlannerRows.map(r => r.instructor.id);
+    const [moved] = currentIds.splice(dragIdx, 1);
+    currentIds.splice(dropIdx, 0, moved);
+    saveOrder(currentIds);
+    setDragIdx(null);
+    setDragOverIdx(null);
+    dragCounter.current = 0;
+  }, [dragIdx, orderedPlannerRows, saveOrder]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragIdx(null);
+    setDragOverIdx(null);
+    dragCounter.current = 0;
+  }, []);
 
   const sortedMeetings = [...meetings].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
@@ -525,7 +609,7 @@ export default function Planner() {
             <CardContent className="p-0">
               {meetingsLoading ? (
                 <div className="flex items-center justify-center py-20 text-muted-foreground">Loading...</div>
-              ) : plannerRows.length === 0 ? (
+              ) : orderedPlannerRows.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                   <CalendarDays className="w-10 h-10 mb-3 opacity-40" />
                   <p className="font-medium" data-testid="text-no-meetings">No meetings planned</p>
@@ -552,20 +636,42 @@ export default function Planner() {
                       </div>
                     </div>
 
-                    {plannerRows.map((row) => {
+                    {orderedPlannerRows.map((row, rowIndex) => {
                       const availWindows = computeAvailableWindows(row.officeHours, row.lectures);
                       const hasMeetings = row.meetings.length > 0;
                       const hasSchedule = row.officeHours.length > 0 || row.lectures.length > 0;
                       const rowHeight = hasMeetings && hasSchedule ? "h-20" : "h-12";
+                      const isDragging = dragIdx === rowIndex;
+                      const isDragOver = dragOverIdx === rowIndex && dragIdx !== rowIndex;
 
                       return (
                         <div
                           key={row.instructor.id}
-                          className="flex border-b last:border-b-0 hover-elevate"
+                          onDragEnter={() => handleDragEnter(rowIndex)}
+                          onDragLeave={handleDragLeave}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            handleDrop(rowIndex);
+                          }}
+                          onDragEnd={handleDragEnd}
+                          className={`flex border-b last:border-b-0 transition-all ${isDragging ? "opacity-40" : ""} ${isDragOver ? "border-t-2 border-t-primary" : ""}`}
                           data-testid={`planner-row-${row.instructor.id}`}
                         >
-                          <div className="w-52 shrink-0 px-4 py-3 border-r flex flex-col justify-center">
-                            <p className="font-medium text-sm truncate">{row.instructor.name}</p>
+                          <div className="w-52 shrink-0 px-2 py-3 border-r flex items-center gap-1">
+                            <div
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.effectAllowed = "move";
+                                handleDragStart(rowIndex);
+                              }}
+                              className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground shrink-0"
+                              data-testid={`drag-handle-${row.instructor.id}`}
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0 flex-1 flex flex-col justify-center">
+                              <p className="font-medium text-sm truncate">{row.instructor.name}</p>
                             {row.instructor.department && (
                               <span className="text-[11px] text-muted-foreground truncate block">{row.instructor.department}</span>
                             )}
@@ -575,6 +681,7 @@ export default function Planner() {
                                 <span className="text-[10px] text-muted-foreground truncate">{row.instructor.officeLocation}</span>
                               </div>
                             )}
+                            </div>
                           </div>
 
                           <div className={`flex-1 relative ${rowHeight}`}>
