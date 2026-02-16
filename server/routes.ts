@@ -214,17 +214,43 @@ export async function registerRoutes(
       if (!Array.isArray(rows) || rows.length === 0) {
         return res.status(400).json({ message: "No data provided" });
       }
-      const items = rows.map((row: any) => ({
-        name: String(row.name || "").trim(),
-        email: row.email ? String(row.email).trim() : null,
-        department: row.department ? String(row.department).trim() : null,
-        officeLocation: row.officeLocation || row.office_location ? String(row.officeLocation || row.office_location).trim() : null,
-        bio: row.bio ? String(row.bio).trim() : null,
-        notes: row.notes ? String(row.notes).trim() : null,
-        targetPriority: row.targetPriority || row.target_priority || "medium",
-      })).filter(item => item.name.length > 0);
+      const parsed = rows.map((row: any) => {
+        const courseName = row.largestCourse || row.largest_course || null;
+        return {
+          instructor: {
+            name: String(row.name || "").trim(),
+            email: row.email ? String(row.email).trim() : null,
+            department: row.department ? String(row.department).trim() : null,
+            officeLocation: row.officeLocation || row.office_location ? String(row.officeLocation || row.office_location).trim() : null,
+            bio: row.bio ? String(row.bio).trim() : null,
+            notes: row.notes ? String(row.notes).trim() : null,
+            targetPriority: row.targetPriority || row.target_priority || "medium",
+          },
+          courseName: courseName ? String(courseName).trim() : null,
+        };
+      }).filter(p => p.instructor.name.length > 0);
+      const items = parsed.map(p => p.instructor);
+      const courseNames = parsed.map(p => p.courseName);
       const created = await storage.bulkCreateInstructors(items);
-      res.json({ imported: created.length });
+
+      let coursesCreated = 0;
+      for (let i = 0; i < created.length; i++) {
+        const cName = courseNames[i];
+        if (cName && cName.length > 0) {
+          const code = cName.split(/\s+/).slice(0, 2).join(" ").substring(0, 20);
+          await storage.createCourse({
+            code: code,
+            name: cName,
+            term: "Current",
+            format: "in-person",
+            enrollment: 0,
+            instructorId: created[i].id,
+          });
+          coursesCreated++;
+        }
+      }
+
+      res.json({ imported: created.length, coursesCreated });
     } catch (error) {
       res.status(400).json({ message: "Failed to import instructors" });
     }

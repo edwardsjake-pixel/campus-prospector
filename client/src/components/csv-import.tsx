@@ -19,6 +19,7 @@ const INSTRUCTOR_FIELDS = [
   { key: "email", label: "Email" },
   { key: "department", label: "Department" },
   { key: "officeLocation", label: "Office Location" },
+  { key: "largestCourse", label: "Largest Course" },
   { key: "bio", label: "Bio" },
   { key: "notes", label: "Notes" },
   { key: "targetPriority", label: "Priority (low/medium/high)" },
@@ -83,8 +84,10 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
     },
     onSuccess: async (res) => {
       const data = await res.json();
-      queryClient.invalidateQueries({ queryKey: [type === "instructors" ? "/api/instructors" : "/api/courses"] });
-      toast({ title: "Import complete", description: `${data.imported} ${type} imported successfully.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+      const extra = data.coursesCreated ? ` (${data.coursesCreated} courses created)` : "";
+      toast({ title: "Import complete", description: `${data.imported} ${type} imported successfully.${extra}` });
       resetAndClose();
       onComplete?.();
     },
@@ -114,11 +117,16 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
       setCsvData(parsed);
       const autoMap: Record<string, string> = {};
       fields.forEach(f => {
-        const match = parsed.headers.find(h =>
-          h.toLowerCase().replace(/[_\s]/g, "") === f.key.toLowerCase().replace(/[_\s]/g, "")
-          || h.toLowerCase().includes(f.key.toLowerCase())
-          || f.label.toLowerCase().includes(h.toLowerCase())
-        );
+        const normalizedKey = f.key.toLowerCase().replace(/[_\s]/g, "");
+        const normalizedLabel = f.label.toLowerCase().replace(/[_\s]/g, "");
+        const match = parsed.headers.find(h => {
+          const nh = h.toLowerCase().replace(/[_\s]/g, "");
+          return nh === normalizedKey
+            || nh === normalizedLabel
+            || h.toLowerCase().includes(f.key.toLowerCase())
+            || h.toLowerCase().includes(f.label.toLowerCase())
+            || f.label.toLowerCase().includes(h.toLowerCase());
+        });
         if (match) autoMap[f.key] = match;
       });
       setMapping(autoMap);
