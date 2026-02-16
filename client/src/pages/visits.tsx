@@ -2,7 +2,7 @@ import { Layout } from "@/components/layout";
 import { useVisits, useCreateVisit } from "@/hooks/use-visits";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, MapPin, Plus } from "lucide-react";
+import { Calendar as CalendarIcon, MapPin, Plus, Mic } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertVisitSchema } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/hooks/use-auth";
+import { VoiceDictation } from "@/components/voice-dictation";
+import { AudioRecorder } from "@/components/audio-recorder";
 
 export default function Visits() {
   const { data: visits, isLoading } = useVisits();
@@ -27,13 +29,12 @@ export default function Visits() {
     defaultValues: {
       location: "",
       notes: "",
-      date: new Date().toISOString().split('T')[0], // Today as YYYY-MM-DD
+      date: new Date().toISOString().split('T')[0],
       userId: user?.id || "",
     },
   });
 
   const onSubmit = (data: InsertVisit) => {
-    // Ensure userId is set
     if (!data.userId && user?.id) {
       data.userId = user.id;
     }
@@ -48,18 +49,18 @@ export default function Visits() {
 
   return (
     <Layout>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-display font-bold text-slate-900">Campus Visits</h1>
+          <h1 className="text-3xl font-display font-bold text-slate-900" data-testid="text-visits-title">Campus Visits</h1>
           <p className="text-slate-500">Log your on-campus activity and outcomes.</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20">
+            <Button data-testid="button-log-visit">
               <Plus className="w-4 h-4 mr-2" /> Log Visit
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Log New Visit</DialogTitle>
             </DialogHeader>
@@ -71,7 +72,7 @@ export default function Visits() {
                   render={({ field }) => (
                     <FormItem>
                       <Label>Date</Label>
-                      <FormControl><Input type="date" {...field} /></FormControl>
+                      <FormControl><Input type="date" {...field} data-testid="input-visit-date" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -83,7 +84,13 @@ export default function Visits() {
                   render={({ field }) => (
                     <FormItem>
                       <Label>Location / Building</Label>
-                      <FormControl><Input placeholder="Science Building, 3rd Floor" {...field} /></FormControl>
+                      <div className="flex items-center gap-2">
+                        <FormControl><Input placeholder="Science Building, 3rd Floor" {...field} data-testid="input-visit-location" /></FormControl>
+                        <VoiceDictation
+                          currentText={field.value || ""}
+                          onTranscript={(text) => form.setValue("location", text)}
+                        />
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -94,16 +101,38 @@ export default function Visits() {
                   name="notes"
                   render={({ field }) => (
                     <FormItem>
-                      <Label>Notes</Label>
-                      <FormControl><Textarea placeholder="General observations..." {...field} value={field.value || ''} /></FormControl>
+                      <div className="flex items-center justify-between">
+                        <Label>Notes</Label>
+                        <VoiceDictation
+                          currentText={field.value || ""}
+                          onTranscript={(text) => form.setValue("notes", text)}
+                        />
+                      </div>
+                      <FormControl>
+                        <Textarea 
+                          placeholder="Speak or type your notes..." 
+                          className="min-h-[100px] resize-none"
+                          {...field} 
+                          value={field.value || ''} 
+                          data-testid="input-visit-notes"
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Mic className="h-3 w-3" /> Tap the mic to dictate notes hands-free
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
+                <div className="border-t pt-4">
+                  <Label className="mb-2 block">Record Meeting Audio</Label>
+                  <AudioRecorder />
+                </div>
+
                 <div className="flex justify-end gap-2 pt-2">
                   <Button type="button" variant="ghost" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={createVisit.isPending}>
+                  <Button type="submit" disabled={createVisit.isPending} data-testid="button-submit-visit">
                     {createVisit.isPending ? "Saving..." : "Save Visit"}
                   </Button>
                 </div>
@@ -121,44 +150,43 @@ export default function Visits() {
             <MapPin className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-medium text-slate-900">No visits logged yet</h3>
             <p className="text-slate-500 mb-4">Start tracking your campus outreach.</p>
-            <Button onClick={() => setIsDialogOpen(true)}>Log First Visit</Button>
+            <Button onClick={() => setIsDialogOpen(true)} data-testid="button-log-first-visit">Log First Visit</Button>
           </div>
         ) : (
           visits?.map((visit) => (
-            <Card key={visit.id} className="border-none shadow-sm hover:shadow-md transition-shadow">
+            <Card key={visit.id} className="border-none shadow-sm">
               <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
+                <div className="flex flex-wrap justify-between items-start gap-2">
                   <div className="flex items-center gap-3">
                     <div className="bg-primary/10 p-2.5 rounded-lg text-primary">
                       <MapPin className="w-5 h-5" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg">{visit.location}</CardTitle>
+                      <CardTitle className="text-lg" data-testid={`text-visit-location-${visit.id}`}>{visit.location}</CardTitle>
                       <div className="flex items-center text-sm text-slate-500 mt-1">
                         <CalendarIcon className="w-3 h-3 mr-1" />
                         {format(new Date(visit.date), "EEEE, MMMM d, yyyy")}
                       </div>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm">Edit</Button>
                 </div>
               </CardHeader>
               <CardContent>
                 {visit.notes && (
-                  <p className="text-slate-600 bg-slate-50 p-3 rounded-lg text-sm mb-4">
+                  <p className="text-slate-600 bg-slate-50 p-3 rounded-lg text-sm mb-4" data-testid={`text-visit-notes-${visit.id}`}>
                     {visit.notes}
                   </p>
                 )}
                 
                 <div className="border-t pt-4 mt-2">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Interactions</h4>
-                  {visit.interactions.length === 0 ? (
+                  {(!visit.interactions || visit.interactions.length === 0) ? (
                     <p className="text-sm text-slate-400 italic">No specific interactions recorded.</p>
                   ) : (
                     <div className="space-y-3">
-                      {visit.interactions.map((interaction) => (
-                        <div key={interaction.id} className="flex items-center justify-between text-sm">
-                          <span className="font-medium text-slate-700">{interaction.instructor.name}</span>
+                      {visit.interactions.map((interaction: any) => (
+                        <div key={interaction.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                          <span className="font-medium text-slate-700">{interaction.instructor?.name || "Unknown"}</span>
                           <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs capitalize">
                             {interaction.outcome?.replace('_', ' ')}
                           </span>

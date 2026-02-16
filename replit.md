@@ -1,0 +1,97 @@
+# CampusAlly - EdTech Sales OS
+
+## Overview
+
+CampusAlly is a full-stack web application designed as a sales operations tool for EdTech professionals. It helps sales reps manage campus territories by tracking instructors, courses, campus visits, and office hours. The app provides a dashboard with analytics, instructor/course management, visit logging with voice dictation and audio recording, and a visit planner with calendar integration.
+
+The project follows a monorepo structure with a React frontend (`client/`), Express backend (`server/`), and shared types/schemas (`shared/`).
+
+## User Preferences
+
+Preferred communication style: Simple, everyday language.
+
+## System Architecture
+
+### Directory Structure
+- `client/` — React SPA (Vite-powered)
+- `server/` — Express API server
+- `shared/` — Shared schemas, types, and API contract definitions
+- `migrations/` — Drizzle-generated database migrations
+- `script/` — Build scripts
+
+### Frontend Architecture
+- **Framework**: React with TypeScript, bundled by Vite
+- **Routing**: Wouter (lightweight client-side router)
+- **State Management**: TanStack React Query for server state; no global client state library
+- **UI Components**: shadcn/ui (new-york style) built on Radix UI primitives with Tailwind CSS
+- **Styling**: Tailwind CSS with CSS variables for theming (light/dark mode support), custom fonts (Plus Jakarta Sans for display, Inter for body)
+- **Forms**: React Hook Form with Zod resolvers for validation
+- **Key Features**: Voice dictation (Web Speech API), audio recording (MediaRecorder API), calendar-based visit planning
+- **Path aliases**: `@/` maps to `client/src/`, `@shared/` maps to `shared/`
+
+### Backend Architecture
+- **Framework**: Express.js running on Node with TypeScript (via tsx)
+- **API Pattern**: RESTful endpoints following the contract defined in `shared/routes.ts`
+- **API Contract**: Centralized API definitions in `shared/routes.ts` using Zod schemas — both input validation and response types are defined here
+- **Authentication**: Replit Auth via OpenID Connect (OIDC) with Passport.js, session-based auth stored in PostgreSQL via `connect-pg-simple`
+- **Auth files are in**: `server/replit_integrations/auth/` — these are critical and should not be deleted
+- **Build**: Custom build script (`script/build.ts`) uses esbuild for server and Vite for client; outputs to `dist/`
+
+### Data Storage
+- **Database**: PostgreSQL via `DATABASE_URL` environment variable
+- **ORM**: Drizzle ORM with `drizzle-zod` for automatic Zod schema generation from table definitions
+- **Schema Location**: `shared/schema.ts` (main tables) and `shared/models/auth.ts` (auth tables)
+- **Schema Push**: `npm run db:push` uses drizzle-kit to push schema changes directly to the database
+
+### Database Tables
+- `instructors` — Name, email, department, office location, bio, notes, target priority
+- `courses` — Code, name, term, format, enrollment, linked to instructor
+- `office_hours` — Day of week, start/end time, location, virtual flag, linked to instructor
+- `visits` — Date, location, notes, linked to user (sales rep)
+- `visit_interactions` — Interactions during visits (linked to visits)
+- `sessions` — Session storage for Replit Auth (mandatory, do not drop)
+- `users` — User storage for Replit Auth (mandatory, do not drop)
+
+### Storage Layer
+- `server/storage.ts` defines an `IStorage` interface and `DatabaseStorage` implementation
+- All database operations go through the storage layer, making it easy to swap implementations
+
+### Key Development Commands
+- `npm run dev` — Start development server with HMR
+- `npm run build` — Build for production
+- `npm run start` — Run production build
+- `npm run db:push` — Push schema changes to database
+- `npm run check` — TypeScript type checking
+
+## External Dependencies
+
+### Database
+- **PostgreSQL** — Primary database, connected via `DATABASE_URL` environment variable
+- **Drizzle ORM** — Query builder and schema management
+- **connect-pg-simple** — PostgreSQL session store for Express sessions
+
+### Authentication
+- **Replit Auth** — OpenID Connect authentication via Replit's OIDC provider
+- **Passport.js** — Authentication middleware with OIDC strategy
+- **express-session** — Session management
+- Required env vars: `DATABASE_URL`, `SESSION_SECRET`, `ISSUER_URL` (defaults to Replit OIDC), `REPL_ID`
+
+### Frontend Libraries
+- **@tanstack/react-query** — Server state management and caching
+- **shadcn/ui + Radix UI** — Full component library (accordion, dialog, select, tabs, toast, etc.)
+- **Tailwind CSS** — Utility-first CSS framework
+- **react-hook-form + @hookform/resolvers** — Form management with Zod validation
+- **wouter** — Client-side routing
+- **date-fns** — Date formatting
+- **react-day-picker** — Calendar component
+- **recharts** — Dashboard charts
+- **lucide-react** — Icon library
+- **vaul** — Drawer component
+- **embla-carousel-react** — Carousel component
+- **cmdk** — Command palette
+
+### Build Tools
+- **Vite** — Frontend bundler with React plugin and HMR
+- **esbuild** — Server-side bundling for production
+- **tsx** — TypeScript execution for development
+- **@replit/vite-plugin-runtime-error-modal** — Error overlay for development

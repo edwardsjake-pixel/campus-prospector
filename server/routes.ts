@@ -97,7 +97,7 @@ export async function registerRoutes(
   // === Visits ===
   app.get(api.visits.list.path, async (req, res) => {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-    const visits = await storage.getVisits((req.user as any).id); // User ID from Replit Auth
+    const visits = await storage.getVisits((req.user as any).claims.sub);
     res.json(visits);
   });
 
