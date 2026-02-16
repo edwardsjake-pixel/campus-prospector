@@ -18,7 +18,7 @@ export default function Login() {
               <span className="font-display font-bold text-xl">CampusAlly</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-display font-bold mb-6 leading-tight">
-              Master your campus territory.
+              Maximize your campus time.
             </h1>
             <p className="text-primary-foreground/80 text-lg">
               The ultimate sales companion for EdTech professionals. Track instructors, plan visits, and close more deals.
