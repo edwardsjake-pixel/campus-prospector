@@ -93,6 +93,7 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
       const data = await res.json();
       queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
       queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/availability"] });
       let desc = `${data.imported} ${type} imported successfully.`;
       if (data.updated) desc += ` ${data.updated} existing records updated.`;
       if (data.skipped) desc += ` ${data.skipped} unchanged.`;
