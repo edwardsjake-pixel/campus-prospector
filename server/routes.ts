@@ -319,6 +319,10 @@ export async function registerRoutes(
         const daysRaw = row.daysOfWeek || row.days_of_week || row.days || null;
         const startRaw = row.lectureStartTime || row.lecture_start_time || row.startTime || row.start_time || null;
         const endRaw = row.lectureEndTime || row.lecture_end_time || row.endTime || row.end_time || null;
+        const ohDaysRaw = row.officeHourDays || row.office_hour_days || null;
+        const ohStartRaw = row.officeHourStartTime || row.office_hour_start_time || null;
+        const ohEndRaw = row.officeHourEndTime || row.office_hour_end_time || null;
+        const ohLocation = row.officeHourLocation || row.office_hour_location || null;
         return {
           instructor: {
             name: String(row.name || "").trim(),
@@ -337,6 +341,10 @@ export async function registerRoutes(
           lectureEndTime: endRaw ? parseTime(String(endRaw)) : null,
           building: row.building ? String(row.building).trim() : null,
           room: row.room ? String(row.room).trim() : null,
+          officeHourDays: ohDaysRaw ? parseDays(String(ohDaysRaw)) : null,
+          officeHourStartTime: ohStartRaw ? parseTime(String(ohStartRaw)) : null,
+          officeHourEndTime: ohEndRaw ? parseTime(String(ohEndRaw)) : null,
+          officeHourLocation: ohLocation ? String(ohLocation).trim() : null,
         };
       }).filter(p => p.instructor.name.length > 0);
       const items = parsed.map(p => p.instructor);
@@ -370,7 +378,30 @@ export async function registerRoutes(
         }
       }
 
-      res.json({ imported: result.created.length, updated: result.updated.length, skipped: result.skippedCount, coursesCreated });
+      let officeHoursCreated = 0;
+      for (let i = 0; i < parsed.length; i++) {
+        const p = parsed[i];
+        if (p.officeHourStartTime && p.officeHourEndTime) {
+          const normalizedName = p.instructor.name.toLowerCase().trim();
+          const instructor = allInstructors.find(inst => inst.name.toLowerCase().trim() === normalizedName);
+          if (instructor) {
+            const ohDays = p.officeHourDays ? p.officeHourDays.split(",").filter(Boolean) : ["Monday"];
+            for (const day of ohDays) {
+              await storage.createOfficeHour({
+                instructorId: instructor.id,
+                dayOfWeek: day.trim(),
+                startTime: p.officeHourStartTime!,
+                endTime: p.officeHourEndTime!,
+                location: p.officeHourLocation || instructor.officeLocation || null,
+                isVirtual: false,
+              });
+              officeHoursCreated++;
+            }
+          }
+        }
+      }
+
+      res.json({ imported: result.created.length, updated: result.updated.length, skipped: result.skippedCount, coursesCreated, officeHoursCreated });
     } catch (error) {
       res.status(400).json({ message: "Failed to import instructors" });
     }

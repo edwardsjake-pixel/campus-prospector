@@ -27,6 +27,10 @@ const INSTRUCTOR_FIELDS = [
   { key: "lectureEndTime", label: "Lecture End Time" },
   { key: "building", label: "Building" },
   { key: "room", label: "Room" },
+  { key: "officeHourDays", label: "Office Hour Days" },
+  { key: "officeHourStartTime", label: "Office Hour Start Time" },
+  { key: "officeHourEndTime", label: "Office Hour End Time" },
+  { key: "officeHourLocation", label: "Office Hour Location" },
   { key: "bio", label: "Bio" },
   { key: "notes", label: "Notes" },
   { key: "targetPriority", label: "Priority (low/medium/high)" },
@@ -98,6 +102,7 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
       if (data.updated) desc += ` ${data.updated} existing records updated.`;
       if (data.skipped) desc += ` ${data.skipped} unchanged.`;
       if (data.coursesCreated) desc += ` ${data.coursesCreated} courses created.`;
+      if (data.officeHoursCreated) desc += ` ${data.officeHoursCreated} office hours created.`;
       toast({ title: "Import complete", description: desc });
       resetAndClose();
       onComplete?.();
@@ -140,23 +145,37 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
         lectureEndTime: ["endtime", "end", "lectureendtime", "lecend", "finishtime", "finish", "to", "timeend", "endlecture", "stop"],
         building: ["building", "bldg", "hall", "facility"],
         room: ["room", "rm", "roomnumber", "roomno", "roomnum"],
+        officeHourDays: ["officehourdays", "ohdays", "officedays", "officehourday", "ohdaysofweek", "ohday"],
+        officeHourStartTime: ["officehourstarttime", "ohstarttime", "ohstart", "officestart", "officehourstart", "ohbegin", "officehourbegin"],
+        officeHourEndTime: ["officehourendtime", "ohendtime", "ohend", "officeend", "officehourend", "ohfinish", "officehourfinish"],
+        officeHourLocation: ["officehourlocation", "ohlocation", "ohroom", "officehourroom", "ohloc", "officehourloc"],
       };
-      fields.forEach(f => {
+      const usedHeaders = new Set<string>();
+      const sortedFields = [...fields].sort((a, b) => {
+        const aLen = a.key.length;
+        const bLen = b.key.length;
+        return bLen - aLen;
+      });
+      sortedFields.forEach(f => {
         const normalizedKey = f.key.toLowerCase().replace(/[_\s\-.]/g, "");
         const normalizedLabel = f.label.toLowerCase().replace(/[_\s\-.]/g, "");
         const match = parsed.headers.find(h => {
+          if (usedHeaders.has(h)) return false;
           const nh = h.toLowerCase().replace(/[_\s\-.]/g, "");
           if (nh === normalizedKey || nh === normalizedLabel) return true;
           if (h.toLowerCase().includes(f.key.toLowerCase())) return true;
           if (h.toLowerCase().includes(f.label.toLowerCase())) return true;
-          if (f.label.toLowerCase().includes(h.toLowerCase()) && h.trim().length > 2) return true;
+          if (f.label.toLowerCase().includes(h.toLowerCase()) && h.trim().length >= f.label.length * 0.5) return true;
           const fieldSynonyms = synonyms[f.key];
           if (fieldSynonyms) {
-            return fieldSynonyms.some(s => nh === s || nh.includes(s) || s.includes(nh));
+            return fieldSynonyms.some(s => nh === s || nh.includes(s));
           }
           return false;
         });
-        if (match) autoMap[f.key] = match;
+        if (match) {
+          autoMap[f.key] = match;
+          usedHeaders.add(match);
+        }
       });
       setMapping(autoMap);
       setStep("map");
@@ -179,7 +198,7 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
     });
   };
 
-  const requiredMapped = fields.filter(f => f.required).every(f => mapping[f.key]);
+  const requiredMapped = fields.filter(f => f.required).every(f => mapping[f.key] && mapping[f.key] !== "__skip__");
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetAndClose(); else setOpen(true); }}>
