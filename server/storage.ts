@@ -56,7 +56,7 @@ export interface IStorage {
 
   // Bulk operations
   getInstructorByName(name: string): Promise<Instructor | undefined>;
-  bulkCreateInstructors(items: InsertInstructor[]): Promise<{ created: Instructor[]; existing: Instructor[]; skippedCount: number }>;
+  bulkCreateInstructors(items: InsertInstructor[]): Promise<{ created: Instructor[]; existing: Instructor[]; updated: Instructor[]; skippedCount: number }>;
   bulkCreateCourses(items: InsertCourse[]): Promise<Course[]>;
 }
 
@@ -196,20 +196,35 @@ export class DatabaseStorage implements IStorage {
     return instructor;
   }
 
-  async bulkCreateInstructors(items: InsertInstructor[]): Promise<{ created: Instructor[]; existing: Instructor[]; skippedCount: number }> {
-    if (items.length === 0) return { created: [], existing: [], skippedCount: 0 };
+  async bulkCreateInstructors(items: InsertInstructor[]): Promise<{ created: Instructor[]; existing: Instructor[]; updated: Instructor[]; skippedCount: number }> {
+    if (items.length === 0) return { created: [], existing: [], updated: [], skippedCount: 0 };
 
     const allExisting = await db.select().from(instructors);
     const existingNames = new Set(allExisting.map(i => i.name.toLowerCase().trim()));
 
     const toCreate: InsertInstructor[] = [];
     const alreadyExisting: Instructor[] = [];
+    const updatedInstructors: Instructor[] = [];
 
     for (let i = 0; i < items.length; i++) {
       const normalizedName = items[i].name.toLowerCase().trim();
       const match = allExisting.find(e => e.name.toLowerCase().trim() === normalizedName);
       if (match) {
-        alreadyExisting.push(match);
+        const updates: Partial<InsertInstructor> = {};
+        const fields: (keyof InsertInstructor)[] = ["email", "department", "institution", "officeLocation", "bio", "notes", "targetPriority"];
+        for (const field of fields) {
+          const newVal = items[i][field];
+          const existingVal = match[field as keyof Instructor];
+          if (newVal && String(newVal).trim() && (!existingVal || !String(existingVal).trim())) {
+            (updates as any)[field] = newVal;
+          }
+        }
+        if (Object.keys(updates).length > 0) {
+          const updated = await this.updateInstructor(match.id, updates);
+          updatedInstructors.push(updated);
+        } else {
+          alreadyExisting.push(match);
+        }
       } else if (!existingNames.has(normalizedName)) {
         toCreate.push(items[i]);
         existingNames.add(normalizedName);
@@ -220,7 +235,7 @@ export class DatabaseStorage implements IStorage {
       ? await db.insert(instructors).values(toCreate).returning()
       : [];
 
-    return { created: newlyCreated, existing: alreadyExisting, skippedCount: alreadyExisting.length };
+    return { created: newlyCreated, existing: alreadyExisting, updated: updatedInstructors, skippedCount: alreadyExisting.length };
   }
 
   async bulkCreateCourses(items: InsertCourse[]): Promise<Course[]> {

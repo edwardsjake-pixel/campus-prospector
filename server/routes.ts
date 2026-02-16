@@ -286,7 +286,7 @@ export async function registerRoutes(
       const result = await storage.bulkCreateInstructors(items);
 
       let coursesCreated = 0;
-      const allInstructors = [...result.created, ...result.existing];
+      const allInstructors = [...result.created, ...result.existing, ...result.updated];
       for (let i = 0; i < parsed.length; i++) {
         const cName = parsed[i].courseName;
         if (cName && cName.length > 0) {
@@ -307,8 +307,7 @@ export async function registerRoutes(
         }
       }
 
-      const skippedMsg = result.skippedCount > 0 ? ` (${result.skippedCount} duplicates skipped)` : "";
-      res.json({ imported: result.created.length, skipped: result.skippedCount, coursesCreated });
+      res.json({ imported: result.created.length, updated: result.updated.length, skipped: result.skippedCount, coursesCreated });
     } catch (error) {
       res.status(400).json({ message: "Failed to import instructors" });
     }

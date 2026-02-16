@@ -88,7 +88,8 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
       queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
       let desc = `${data.imported} ${type} imported successfully.`;
-      if (data.skipped) desc += ` ${data.skipped} duplicates skipped.`;
+      if (data.updated) desc += ` ${data.updated} existing records updated.`;
+      if (data.skipped) desc += ` ${data.skipped} unchanged.`;
       if (data.coursesCreated) desc += ` ${data.coursesCreated} courses created.`;
       toast({ title: "Import complete", description: desc });
       resetAndClose();
