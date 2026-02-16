@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { MapPin, User, Filter, CalendarPlus } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { MapPin, User, Filter, CalendarPlus, Building2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -193,14 +195,18 @@ export default function Availability() {
   const todayDay = getTodayDayName();
   const [selectedDay, setSelectedDay] = useState(todayDay);
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [institutionFilter, setInstitutionFilter] = useState<string>("all");
+  const [showAll, setShowAll] = useState(true);
   const { toast } = useToast();
 
   const todayDateStr = format(new Date(), "yyyy-MM-dd");
 
   const { data: rows = [], isLoading } = useQuery<AvailabilityRow[]>({
-    queryKey: ["/api/availability", selectedDay],
+    queryKey: ["/api/availability", selectedDay, institutionFilter, showAll],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/availability?dayOfWeek=${selectedDay}`);
+      let url = `/api/availability?dayOfWeek=${selectedDay}&showAll=${showAll}`;
+      if (institutionFilter !== "all") url += `&institution=${encodeURIComponent(institutionFilter)}`;
+      const res = await apiRequest("GET", url);
       return res.json();
     },
     enabled: !!selectedDay,
@@ -251,9 +257,20 @@ export default function Availability() {
     return Array.from(depts).sort();
   }, [rows]);
 
+  const institutions = useMemo(() => {
+    const insts = new Set<string>();
+    rows.forEach(r => {
+      if (r.instructor.institution) insts.add(r.instructor.institution);
+    });
+    return Array.from(insts).sort();
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
-    if (departmentFilter === "all") return rows;
-    return rows.filter(r => r.instructor.department === departmentFilter);
+    let filtered = rows;
+    if (departmentFilter !== "all") {
+      filtered = filtered.filter(r => r.instructor.department === departmentFilter);
+    }
+    return filtered;
   }, [rows, departmentFilter]);
 
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i);
@@ -279,45 +296,72 @@ export default function Availability() {
         </div>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <Select value={selectedDay} onValueChange={setSelectedDay}>
-                <SelectTrigger className="w-[160px]" data-testid="select-day">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAYS.map(day => (
-                    <SelectItem key={day} value={day}>{day}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <CardHeader className="flex flex-col gap-4 space-y-0 pb-4">
+            <div className="flex flex-row items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
+                <Select value={selectedDay} onValueChange={setSelectedDay}>
+                  <SelectTrigger className="w-[160px]" data-testid="select-day">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAYS.map(day => (
+                      <SelectItem key={day} value={day}>{day}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                <SelectTrigger className="w-[180px]" data-testid="select-department-filter">
-                  <Filter className="w-4 h-4 mr-1 text-muted-foreground" />
-                  <SelectValue placeholder="All Departments" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departments.map(d => (
-                    <SelectItem key={d} value={d}>{d}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
+                  <SelectTrigger className="w-[200px]" data-testid="select-institution-filter">
+                    <Building2 className="w-4 h-4 mr-1 text-muted-foreground" />
+                    <SelectValue placeholder="All Institutions" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Institutions</SelectItem>
+                    {institutions.map(inst => (
+                      <SelectItem key={inst} value={inst}>{inst}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-            <div className="flex items-center gap-4 text-xs flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-sm bg-emerald-500/20 border border-emerald-400/50" />
-                <span className="text-muted-foreground">Office Hours</span>
+                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                  <SelectTrigger className="w-[180px]" data-testid="select-department-filter">
+                    <Filter className="w-4 h-4 mr-1 text-muted-foreground" />
+                    <SelectValue placeholder="All Departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departments.map(d => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="show-all"
+                    checked={showAll}
+                    onCheckedChange={setShowAll}
+                    data-testid="switch-show-all"
+                  />
+                  <Label htmlFor="show-all" className="text-sm text-muted-foreground cursor-pointer">
+                    Show all instructors
+                  </Label>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-sm bg-blue-500/20 border border-blue-400/50" />
-                <span className="text-muted-foreground">Lecture</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-sm bg-amber-400/15 border border-amber-300/40" />
-                <span className="text-muted-foreground">Likely Available</span>
+
+              <div className="flex items-center gap-4 text-xs flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-emerald-500/20 border border-emerald-400/50" />
+                  <span className="text-muted-foreground">Office Hours</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-blue-500/20 border border-blue-400/50" />
+                  <span className="text-muted-foreground">Lecture</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-amber-400/15 border border-amber-300/40" />
+                  <span className="text-muted-foreground">Likely Available</span>
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -330,8 +374,8 @@ export default function Availability() {
             ) : filteredRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-muted-foreground" data-testid="text-no-availability">
                 <User className="w-10 h-10 mb-3 opacity-40" />
-                <p className="font-medium">No instructors scheduled on {selectedDay}</p>
-                <p className="text-sm">Try a different day or add office hours and lecture schedules</p>
+                <p className="font-medium">No instructors found for {selectedDay}</p>
+                <p className="text-sm">Try a different day, adjust filters, or enable "Show all instructors"</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -359,11 +403,12 @@ export default function Availability() {
 
                   {filteredRows.map((row) => {
                     const availWindows = computeAvailableWindows(row.officeHours, row.lectures);
+                    const hasSchedule = row.officeHours.length > 0 || row.lectures.length > 0;
 
                     return (
                       <div
                         key={row.instructor.id}
-                        className="flex border-b last:border-b-0 hover-elevate"
+                        className={`flex border-b last:border-b-0 hover-elevate ${!hasSchedule ? "opacity-60" : ""}`}
                         data-testid={`row-instructor-${row.instructor.id}`}
                       >
                         <div className="w-56 shrink-0 px-4 py-3 border-r flex items-center gap-2">
@@ -371,8 +416,13 @@ export default function Availability() {
                             <p className="font-medium text-sm truncate" data-testid={`text-instructor-name-${row.instructor.id}`}>
                               {row.instructor.name}
                             </p>
+                            {row.instructor.institution && (
+                              <span className="text-[11px] text-muted-foreground truncate block">
+                                {row.instructor.institution}
+                              </span>
+                            )}
                             {row.instructor.department && (
-                              <span className="text-[11px] text-muted-foreground truncate block">{row.instructor.department}</span>
+                              <span className="text-[10px] text-muted-foreground truncate block">{row.instructor.department}</span>
                             )}
                             {row.instructor.officeLocation && (
                               <div className="flex items-center gap-0.5 mt-0.5">
@@ -381,20 +431,22 @@ export default function Availability() {
                               </div>
                             )}
                           </div>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => handleQuickAdd(row)}
-                                disabled={quickAddMutation.isPending}
-                                data-testid={`button-add-to-plan-${row.instructor.id}`}
-                              >
-                                <CalendarPlus className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Add to today's plan</TooltipContent>
-                          </Tooltip>
+                          {hasSchedule && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => handleQuickAdd(row)}
+                                  disabled={quickAddMutation.isPending}
+                                  data-testid={`button-add-to-plan-${row.instructor.id}`}
+                                >
+                                  <CalendarPlus className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Add to today's plan</TooltipContent>
+                            </Tooltip>
+                          )}
                         </div>
 
                         <div className="flex-1 relative h-16">
@@ -405,6 +457,12 @@ export default function Availability() {
                               style={{ left: `${((h - HOUR_START) / TOTAL_HOURS) * 100}%` }}
                             />
                           ))}
+
+                          {!hasSchedule && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-xs text-muted-foreground">No schedule data</span>
+                            </div>
+                          )}
 
                           {availWindows.map((w, i) => (
                             <TimeBlock

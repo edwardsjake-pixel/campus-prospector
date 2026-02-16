@@ -11,6 +11,7 @@ export const instructors = pgTable("instructors", {
   name: text("name").notNull().unique(),
   email: text("email"),
   department: text("department"),
+  institution: text("institution"),
   officeLocation: text("office_location"),
   bio: text("bio"),
   notes: text("notes"),

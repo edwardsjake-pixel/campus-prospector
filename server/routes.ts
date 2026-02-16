@@ -19,6 +19,7 @@ export async function registerRoutes(
   app.get(api.instructors.list.path, async (req, res) => {
     const filters = {
       department: req.query.department as string,
+      institution: req.query.institution as string,
       targetPriority: req.query.targetPriority as string,
       search: req.query.search as string,
     };
@@ -60,6 +61,15 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/instructors/:id", async (req, res) => {
+    try {
+      await storage.deleteInstructor(Number(req.params.id));
+      res.json({ message: "Deleted" });
+    } catch (error) {
+      res.status(404).json({ message: "Instructor not found" });
+    }
+  });
+
   // === Courses ===
   app.get(api.courses.list.path, async (req, res) => {
     const instructorId = req.query.instructorId ? Number(req.query.instructorId) : undefined;
@@ -77,6 +87,24 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/courses/:id", async (req, res) => {
+    try {
+      const course = await storage.updateCourse(Number(req.params.id), req.body);
+      res.json(course);
+    } catch (error) {
+      res.status(404).json({ message: "Course not found" });
+    }
+  });
+
+  app.delete("/api/courses/:id", async (req, res) => {
+    try {
+      await storage.deleteCourse(Number(req.params.id));
+      res.json({ message: "Deleted" });
+    } catch (error) {
+      res.status(404).json({ message: "Course not found" });
+    }
+  });
+
   // === Office Hours ===
   app.get(api.officeHours.list.path, async (req, res) => {
     const instructorId = req.query.instructorId ? Number(req.query.instructorId) : undefined;
@@ -91,6 +119,24 @@ export async function registerRoutes(
       res.status(201).json(officeHour);
     } catch (error) {
       res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
+  app.put("/api/office-hours/:id", async (req, res) => {
+    try {
+      const officeHour = await storage.updateOfficeHour(Number(req.params.id), req.body);
+      res.json(officeHour);
+    } catch (error) {
+      res.status(404).json({ message: "Office hour not found" });
+    }
+  });
+
+  app.delete("/api/office-hours/:id", async (req, res) => {
+    try {
+      await storage.deleteOfficeHour(Number(req.params.id));
+      res.json({ message: "Deleted" });
+    } catch (error) {
+      res.status(404).json({ message: "Office hour not found" });
     }
   });
 
@@ -174,7 +220,12 @@ export async function registerRoutes(
     const dayOfWeek = req.query.dayOfWeek as string;
     if (!dayOfWeek) return res.status(400).json({ message: "dayOfWeek is required" });
 
-    const allInstructors = await storage.getInstructors();
+    const institution = req.query.institution as string | undefined;
+    const showAll = req.query.showAll === "true";
+
+    const filters: any = {};
+    if (institution) filters.institution = institution;
+    const allInstructors = await storage.getInstructors(filters);
     const allOfficeHours = await storage.getOfficeHours();
     const allCourses = await storage.getCourses();
 
@@ -187,7 +238,7 @@ export async function registerRoutes(
           c.daysOfWeek && c.daysOfWeek.split(",").map(d => d.trim()).includes(dayOfWeek) &&
           c.lectureStartTime && c.lectureEndTime
       );
-      if (oh.length === 0 && lectures.length === 0) return null;
+      if (!showAll && oh.length === 0 && lectures.length === 0) return null;
       return {
         instructor,
         officeHours: oh,
@@ -221,6 +272,7 @@ export async function registerRoutes(
             name: String(row.name || "").trim(),
             email: row.email ? String(row.email).trim() : null,
             department: row.department ? String(row.department).trim() : null,
+            institution: row.institution ? String(row.institution).trim() : null,
             officeLocation: row.officeLocation || row.office_location ? String(row.officeLocation || row.office_location).trim() : null,
             bio: row.bio ? String(row.bio).trim() : null,
             notes: row.notes ? String(row.notes).trim() : null,

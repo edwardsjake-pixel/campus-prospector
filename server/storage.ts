@@ -23,18 +23,23 @@ import { eq, like, or, and } from "drizzle-orm";
 
 export interface IStorage {
   // Instructors
-  getInstructors(filters?: { department?: string; targetPriority?: string; search?: string }): Promise<Instructor[]>;
+  getInstructors(filters?: { department?: string; institution?: string; targetPriority?: string; search?: string }): Promise<Instructor[]>;
   getInstructor(id: number): Promise<Instructor | undefined>;
   createInstructor(instructor: InsertInstructor): Promise<Instructor>;
   updateInstructor(id: number, updates: Partial<InsertInstructor>): Promise<Instructor>;
+  deleteInstructor(id: number): Promise<void>;
 
   // Courses
   getCourses(instructorId?: number): Promise<Course[]>;
   createCourse(course: InsertCourse): Promise<Course>;
+  updateCourse(id: number, updates: Partial<InsertCourse>): Promise<Course>;
+  deleteCourse(id: number): Promise<void>;
 
   // Office Hours
   getOfficeHours(instructorId?: number): Promise<OfficeHour[]>;
   createOfficeHour(officeHour: InsertOfficeHour): Promise<OfficeHour>;
+  updateOfficeHour(id: number, updates: Partial<InsertOfficeHour>): Promise<OfficeHour>;
+  deleteOfficeHour(id: number): Promise<void>;
 
   // Visits
   getVisits(userId: string): Promise<Visit[]>;
@@ -57,11 +62,12 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   // Instructors
-  async getInstructors(filters?: { department?: string; targetPriority?: string; search?: string }): Promise<Instructor[]> {
+  async getInstructors(filters?: { department?: string; institution?: string; targetPriority?: string; search?: string }): Promise<Instructor[]> {
     let query = db.select().from(instructors);
     
     const conditions = [];
     if (filters?.department) conditions.push(eq(instructors.department, filters.department));
+    if (filters?.institution) conditions.push(eq(instructors.institution, filters.institution));
     if (filters?.targetPriority) conditions.push(eq(instructors.targetPriority, filters.targetPriority));
     if (filters?.search) {
       conditions.push(or(
@@ -96,6 +102,14 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async deleteInstructor(id: number): Promise<void> {
+    await db.delete(officeHours).where(eq(officeHours.instructorId, id));
+    await db.delete(courses).where(eq(courses.instructorId, id));
+    await db.delete(visitInteractions).where(eq(visitInteractions.instructorId, id));
+    await db.delete(plannedMeetings).where(eq(plannedMeetings.instructorId, id));
+    await db.delete(instructors).where(eq(instructors.id, id));
+  }
+
   // Courses
   async getCourses(instructorId?: number): Promise<Course[]> {
     if (instructorId) {
@@ -109,6 +123,15 @@ export class DatabaseStorage implements IStorage {
     return newCourse;
   }
 
+  async updateCourse(id: number, updates: Partial<InsertCourse>): Promise<Course> {
+    const [updated] = await db.update(courses).set(updates).where(eq(courses.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCourse(id: number): Promise<void> {
+    await db.delete(courses).where(eq(courses.id, id));
+  }
+
   // Office Hours
   async getOfficeHours(instructorId?: number): Promise<OfficeHour[]> {
     if (instructorId) {
@@ -120,6 +143,15 @@ export class DatabaseStorage implements IStorage {
   async createOfficeHour(officeHour: InsertOfficeHour): Promise<OfficeHour> {
     const [newOH] = await db.insert(officeHours).values(officeHour).returning();
     return newOH;
+  }
+
+  async updateOfficeHour(id: number, updates: Partial<InsertOfficeHour>): Promise<OfficeHour> {
+    const [updated] = await db.update(officeHours).set(updates).where(eq(officeHours.id, id)).returning();
+    return updated;
+  }
+
+  async deleteOfficeHour(id: number): Promise<void> {
+    await db.delete(officeHours).where(eq(officeHours.id, id));
   }
 
   // Visits

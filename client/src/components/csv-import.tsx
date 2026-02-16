@@ -17,6 +17,7 @@ interface CsvImportProps {
 const INSTRUCTOR_FIELDS = [
   { key: "name", label: "Name", required: true },
   { key: "email", label: "Email" },
+  { key: "institution", label: "Institution" },
   { key: "department", label: "Department" },
   { key: "officeLocation", label: "Office Location" },
   { key: "largestCourse", label: "Largest Course" },
@@ -118,16 +119,24 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
       }
       setCsvData(parsed);
       const autoMap: Record<string, string> = {};
+      const synonyms: Record<string, string[]> = {
+        institution: ["school", "university", "college", "campus"],
+        officeLocation: ["office", "location", "room"],
+      };
       fields.forEach(f => {
         const normalizedKey = f.key.toLowerCase().replace(/[_\s]/g, "");
         const normalizedLabel = f.label.toLowerCase().replace(/[_\s]/g, "");
         const match = parsed.headers.find(h => {
           const nh = h.toLowerCase().replace(/[_\s]/g, "");
-          return nh === normalizedKey
-            || nh === normalizedLabel
-            || h.toLowerCase().includes(f.key.toLowerCase())
-            || h.toLowerCase().includes(f.label.toLowerCase())
-            || f.label.toLowerCase().includes(h.toLowerCase());
+          if (nh === normalizedKey || nh === normalizedLabel) return true;
+          if (h.toLowerCase().includes(f.key.toLowerCase())) return true;
+          if (h.toLowerCase().includes(f.label.toLowerCase())) return true;
+          if (f.label.toLowerCase().includes(h.toLowerCase())) return true;
+          const fieldSynonyms = synonyms[f.key];
+          if (fieldSynonyms) {
+            return fieldSynonyms.some(s => nh === s || nh.includes(s));
+          }
+          return false;
         });
         if (match) autoMap[f.key] = match;
       });

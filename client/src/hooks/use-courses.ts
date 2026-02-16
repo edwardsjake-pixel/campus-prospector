@@ -26,6 +26,21 @@ export function useCreateCourse() {
   });
 }
 
+export function useUpdateCourse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: number } & Partial<InsertCourse>) => {
+      const res = await apiRequest("PUT", `/api/courses/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/availability"] });
+    },
+  });
+}
+
 export function useDeleteCourse() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -35,6 +50,7 @@ export function useDeleteCourse() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/availability"] });
     },
   });
 }

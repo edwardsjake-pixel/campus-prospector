@@ -40,11 +40,12 @@ export function useUpdateInstructor() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...data }: { id: number } & Partial<InsertInstructor>) => {
-      const res = await apiRequest("PATCH", `/api/instructors/${id}`, data);
+      const res = await apiRequest("PUT", `/api/instructors/${id}`, data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/availability"] });
     },
   });
 }
@@ -57,6 +58,8 @@ export function useDeleteInstructor() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/availability"] });
     },
   });
 }
