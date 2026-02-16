@@ -122,23 +122,26 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
       setCsvData(parsed);
       const autoMap: Record<string, string> = {};
       const synonyms: Record<string, string[]> = {
-        institution: ["school", "university", "college", "campus", "institution"],
-        officeLocation: ["office", "location", "room", "officelocation"],
-        largestCourse: ["course", "class", "section", "largestcourse", "largestclass", "largestsection", "lgstcrs", "lgstcourse"],
-        enrollment: ["enrollment", "enrolled", "students", "classsize", "sectionsize", "size"],
+        institution: ["school", "university", "college", "campus", "institution", "inst"],
+        officeLocation: ["office", "location", "room", "officelocation", "officeloc", "ofcloc"],
+        largestCourse: ["largestcourse", "largestclass", "largestsection", "lgstcrs", "lgstcourse", "lgstclass", "lrgstcrs", "lrgstcourse", "largestcrs", "lgcrs", "lgcourse"],
+        enrollment: ["enrollment", "enrolled", "enrl", "enroll", "students", "classsize", "sectionsize", "crsenrl", "crsenrollment"],
+        department: ["department", "dept", "division"],
+        name: ["name", "instructor", "faculty", "teacher", "prof", "professor"],
+        email: ["email", "mail", "e-mail"],
       };
       fields.forEach(f => {
-        const normalizedKey = f.key.toLowerCase().replace(/[_\s]/g, "");
-        const normalizedLabel = f.label.toLowerCase().replace(/[_\s]/g, "");
+        const normalizedKey = f.key.toLowerCase().replace(/[_\s\-.]/g, "");
+        const normalizedLabel = f.label.toLowerCase().replace(/[_\s\-.]/g, "");
         const match = parsed.headers.find(h => {
-          const nh = h.toLowerCase().replace(/[_\s]/g, "");
+          const nh = h.toLowerCase().replace(/[_\s\-.]/g, "");
           if (nh === normalizedKey || nh === normalizedLabel) return true;
           if (h.toLowerCase().includes(f.key.toLowerCase())) return true;
           if (h.toLowerCase().includes(f.label.toLowerCase())) return true;
-          if (f.label.toLowerCase().includes(h.toLowerCase())) return true;
+          if (f.label.toLowerCase().includes(h.toLowerCase()) && h.trim().length > 2) return true;
           const fieldSynonyms = synonyms[f.key];
           if (fieldSynonyms) {
-            return fieldSynonyms.some(s => nh === s || nh.includes(s));
+            return fieldSynonyms.some(s => nh === s || nh.includes(s) || s.includes(nh));
           }
           return false;
         });
