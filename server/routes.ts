@@ -265,10 +265,60 @@ export async function registerRoutes(
       if (!Array.isArray(rows) || rows.length === 0) {
         return res.status(400).json({ message: "No data provided" });
       }
+      const DAY_ABBREV: Record<string, string> = {
+        m: "Monday", mo: "Monday", mon: "Monday", monday: "Monday",
+        t: "Tuesday", tu: "Tuesday", tue: "Tuesday", tues: "Tuesday", tuesday: "Tuesday",
+        w: "Wednesday", we: "Wednesday", wed: "Wednesday", wednesday: "Wednesday",
+        r: "Thursday", th: "Thursday", thu: "Thursday", thur: "Thursday", thurs: "Thursday", thursday: "Thursday",
+        f: "Friday", fr: "Friday", fri: "Friday", friday: "Friday",
+        s: "Saturday", sa: "Saturday", sat: "Saturday", saturday: "Saturday",
+        u: "Sunday", su: "Sunday", sun: "Sunday", sunday: "Sunday",
+      };
+
+      function parseDays(raw: string): string {
+        if (!raw || !raw.trim()) return "";
+        const cleaned = raw.trim();
+        if (/^[MTWRFSU]+$/i.test(cleaned) && cleaned.length <= 7) {
+          const charMap: Record<string, string> = { M: "Monday", T: "Tuesday", W: "Wednesday", R: "Thursday", F: "Friday", S: "Saturday", U: "Sunday" };
+          return cleaned.toUpperCase().split("").map(c => charMap[c]).filter(Boolean).join(",");
+        }
+        const parts = cleaned.split(/[,\/;&\s]+/).filter(Boolean);
+        const days = parts.map(p => DAY_ABBREV[p.toLowerCase()]).filter(Boolean);
+        return days.length > 0 ? days.join(",") : cleaned;
+      }
+
+      function parseTime(raw: string): string | null {
+        if (!raw || !raw.trim()) return null;
+        const t = raw.trim();
+        const hhmm = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(am|pm))?$/i);
+        if (hhmm) {
+          let h = parseInt(hhmm[1], 10);
+          const m = hhmm[2];
+          const ampm = hhmm[4];
+          if (ampm) {
+            if (ampm.toLowerCase() === "pm" && h < 12) h += 12;
+            if (ampm.toLowerCase() === "am" && h === 12) h = 0;
+          }
+          return `${String(h).padStart(2, "0")}:${m}:00`;
+        }
+        const plain = t.match(/^(\d{1,2})(?:\s*(am|pm))$/i);
+        if (plain) {
+          let h = parseInt(plain[1], 10);
+          const ampm = plain[2];
+          if (ampm.toLowerCase() === "pm" && h < 12) h += 12;
+          if (ampm.toLowerCase() === "am" && h === 12) h = 0;
+          return `${String(h).padStart(2, "0")}:00:00`;
+        }
+        return null;
+      }
+
       const parsed = rows.map((row: any) => {
         const courseName = row.largestCourse || row.largest_course || null;
         const enrollmentRaw = row.enrollment || row.enrolled || null;
         const enrollment = enrollmentRaw ? parseInt(String(enrollmentRaw).replace(/[^0-9]/g, ""), 10) : 0;
+        const daysRaw = row.daysOfWeek || row.days_of_week || row.days || null;
+        const startRaw = row.lectureStartTime || row.lecture_start_time || row.startTime || row.start_time || null;
+        const endRaw = row.lectureEndTime || row.lecture_end_time || row.endTime || row.end_time || null;
         return {
           instructor: {
             name: String(row.name || "").trim(),
@@ -282,6 +332,11 @@ export async function registerRoutes(
           },
           courseName: courseName ? String(courseName).trim() : null,
           enrollment: isNaN(enrollment) ? 0 : enrollment,
+          daysOfWeek: daysRaw ? parseDays(String(daysRaw)) : null,
+          lectureStartTime: startRaw ? parseTime(String(startRaw)) : null,
+          lectureEndTime: endRaw ? parseTime(String(endRaw)) : null,
+          building: row.building ? String(row.building).trim() : null,
+          room: row.room ? String(row.room).trim() : null,
         };
       }).filter(p => p.instructor.name.length > 0);
       const items = parsed.map(p => p.instructor);
@@ -304,6 +359,11 @@ export async function registerRoutes(
               format: "in-person",
               enrollment: parsed[i].enrollment || 0,
               instructorId: instructor.id,
+              daysOfWeek: parsed[i].daysOfWeek || null,
+              lectureStartTime: parsed[i].lectureStartTime || null,
+              lectureEndTime: parsed[i].lectureEndTime || null,
+              building: parsed[i].building || null,
+              room: parsed[i].room || null,
             });
             coursesCreated++;
           }

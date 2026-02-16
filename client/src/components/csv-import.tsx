@@ -22,6 +22,11 @@ const INSTRUCTOR_FIELDS = [
   { key: "officeLocation", label: "Office Location" },
   { key: "largestCourse", label: "Largest Course" },
   { key: "enrollment", label: "Enrollment" },
+  { key: "daysOfWeek", label: "Lecture Days" },
+  { key: "lectureStartTime", label: "Lecture Start Time" },
+  { key: "lectureEndTime", label: "Lecture End Time" },
+  { key: "building", label: "Building" },
+  { key: "room", label: "Room" },
   { key: "bio", label: "Bio" },
   { key: "notes", label: "Notes" },
   { key: "targetPriority", label: "Priority (low/medium/high)" },
@@ -123,12 +128,17 @@ export function CsvImport({ type, onComplete }: CsvImportProps) {
       const autoMap: Record<string, string> = {};
       const synonyms: Record<string, string[]> = {
         institution: ["school", "university", "college", "campus", "institution", "inst"],
-        officeLocation: ["office", "location", "room", "officelocation", "officeloc", "ofcloc"],
+        officeLocation: ["office", "location", "officelocation", "officeloc", "ofcloc", "ofcroom"],
         largestCourse: ["largestcourse", "largestclass", "largestsection", "lgstcrs", "lgstcourse", "lgstclass", "lrgstcrs", "lrgstcourse", "largestcrs", "lgcrs", "lgcourse"],
         enrollment: ["enrollment", "enrolled", "enrl", "enroll", "students", "classsize", "sectionsize", "crsenrl", "crsenrollment"],
         department: ["department", "dept", "division"],
         name: ["name", "instructor", "faculty", "teacher", "prof", "professor"],
         email: ["email", "mail", "e-mail"],
+        daysOfWeek: ["days", "day", "lecturedays", "lecdays", "meetingdays", "mtgdays", "daysofweek", "dayofweek", "meetingpattern", "pattern"],
+        lectureStartTime: ["starttime", "start", "lecturestarttime", "lecstart", "begintime", "begin", "from", "timestart", "startlecture"],
+        lectureEndTime: ["endtime", "end", "lectureendtime", "lecend", "finishtime", "finish", "to", "timeend", "endlecture", "stop"],
+        building: ["building", "bldg", "hall", "facility"],
+        room: ["room", "rm", "roomnumber", "roomno", "roomnum"],
       };
       fields.forEach(f => {
         const normalizedKey = f.key.toLowerCase().replace(/[_\s\-.]/g, "");
