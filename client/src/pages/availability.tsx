@@ -419,8 +419,8 @@ export default function Availability() {
                         className={`flex border-b last:border-b-0 hover-elevate ${!hasSchedule ? "opacity-60" : ""}`}
                         data-testid={`row-instructor-${row.instructor.id}`}
                       >
-                        <div className="w-56 shrink-0 px-4 py-3 border-r flex items-center gap-2">
-                          <div className="flex-1 min-w-0 relative">
+                        <div className="w-56 shrink-0 px-4 py-3 border-r flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate" data-testid={`text-instructor-name-${row.instructor.id}`}>
                               {row.instructor.name}
                             </p>

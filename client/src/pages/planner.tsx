@@ -673,7 +673,7 @@ export default function Planner() {
                             >
                               <GripVertical className="w-4 h-4" />
                             </div>
-                            <div className="min-w-0 flex-1 flex flex-col justify-center relative">
+                            <div className="min-w-0 flex-1 flex flex-col justify-center">
                               <p className="font-medium text-sm truncate">{row.instructor.name}</p>
                             {row.instructor.department && (
                               <span className="text-[10px] text-muted-foreground truncate block">{row.instructor.department}</span>

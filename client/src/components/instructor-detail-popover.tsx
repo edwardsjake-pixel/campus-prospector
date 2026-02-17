@@ -35,49 +35,33 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
 
       {expanded && (
         <div
-          className="absolute left-0 top-full z-30 bg-popover border rounded-md shadow-lg p-3 space-y-2 min-w-[280px] max-w-[380px]"
+          className="mt-1 bg-muted/50 border rounded-md p-2 space-y-1.5 text-xs"
           onClick={(e) => e.stopPropagation()}
           data-testid={`detail-panel-${instructor.id}`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-medium text-sm">{instructor.name}</p>
-            {instructor.targetPriority && (
-              <Badge variant="outline" className="text-[10px]">
-                {instructor.targetPriority.toUpperCase()}
-              </Badge>
-            )}
-          </div>
-
-          {instructor.institution && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Building2 className="w-3 h-3 shrink-0" />
-              {instructor.institution}
-            </div>
-          )}
-
           {instructor.email && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1 text-muted-foreground">
               <Mail className="w-3 h-3 shrink-0" />
-              {instructor.email}
+              <span className="truncate">{instructor.email}</span>
             </div>
           )}
 
           {instructor.officeLocation && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1 text-muted-foreground">
               <MapPin className="w-3 h-3 shrink-0" />
-              {instructor.officeLocation}
+              <span className="truncate">{instructor.officeLocation}</span>
             </div>
           )}
 
           {hasNotes && (
-            <p className="text-xs text-muted-foreground border-t pt-2">
+            <p className="text-muted-foreground text-[11px] leading-snug">
               {instructor.bio || instructor.notes}
             </p>
           )}
 
           {hasOfficeHours && (
-            <div className="border-t pt-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1">
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 flex items-center gap-1">
                 <Clock className="w-2.5 h-2.5" /> Office Hours
               </p>
               <div className="flex flex-wrap gap-1">
@@ -92,26 +76,24 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
           )}
 
           {hasCourses && (
-            <div className="border-t pt-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1">
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 flex items-center gap-1">
                 <BookOpen className="w-2.5 h-2.5" /> Courses ({courses.length})
               </p>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {courses.map((course) => (
-                  <div key={course.id} className="text-xs flex items-start gap-1">
+                  <div key={course.id} className="text-[11px] flex items-start gap-1">
                     <span className="font-mono font-bold shrink-0">{course.code}</span>
                     <span className="text-muted-foreground">
                       {course.name}
-                      {course.daysOfWeek && (
+                      {course.daysOfWeek && course.lectureStartTime && course.lectureEndTime && (
                         <span className="ml-1">
                           {course.daysOfWeek.split(",").map(d => d.trim().slice(0,3)).join("/")}
-                          {course.lectureStartTime && course.lectureEndTime && (
-                            <span> {course.lectureStartTime.slice(0,5)}-{course.lectureEndTime.slice(0,5)}</span>
-                          )}
+                          {" "}{course.lectureStartTime.slice(0,5)}-{course.lectureEndTime.slice(0,5)}
                         </span>
                       )}
                       {course.building && <span className="ml-1">{course.building}{course.room ? ` ${course.room}` : ""}</span>}
-                      {course.enrollment ? <span className="ml-1">({course.enrollment} students)</span> : null}
+                      {course.enrollment ? <span className="ml-1">({course.enrollment})</span> : null}
                     </span>
                   </div>
                 ))}
