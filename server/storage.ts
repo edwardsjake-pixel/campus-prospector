@@ -7,6 +7,7 @@ import {
   plannedMeetings,
   type Instructor,
   type InsertInstructor,
+  type InstructorWithDetails,
   type Course,
   type InsertCourse,
   type OfficeHour,
@@ -23,7 +24,7 @@ import { eq, like, or, and } from "drizzle-orm";
 
 export interface IStorage {
   // Instructors
-  getInstructors(filters?: { department?: string; institution?: string; targetPriority?: string; search?: string }): Promise<Instructor[]>;
+  getInstructors(filters?: { department?: string; institution?: string; targetPriority?: string; search?: string }): Promise<InstructorWithDetails[]>;
   getInstructor(id: number): Promise<Instructor | undefined>;
   createInstructor(instructor: InsertInstructor): Promise<Instructor>;
   updateInstructor(id: number, updates: Partial<InsertInstructor>): Promise<Instructor>;
@@ -62,7 +63,7 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   // Instructors
-  async getInstructors(filters?: { department?: string; institution?: string; targetPriority?: string; search?: string }): Promise<Instructor[]> {
+  async getInstructors(filters?: { department?: string; institution?: string; targetPriority?: string; search?: string }): Promise<InstructorWithDetails[]> {
     let query = db.select().from(instructors);
     
     const conditions = [];
@@ -80,7 +81,34 @@ export class DatabaseStorage implements IStorage {
       query = query.where(and(...conditions)) as any;
     }
     
-    return await query;
+    const allInstructors = await query;
+
+    const allCourses = await db.select().from(courses);
+    const allOfficeHours = await db.select().from(officeHours);
+
+    const coursesByInstructor = new Map<number, Course[]>();
+    for (const course of allCourses) {
+      if (course.instructorId) {
+        const list = coursesByInstructor.get(course.instructorId) || [];
+        list.push(course);
+        coursesByInstructor.set(course.instructorId, list);
+      }
+    }
+
+    const ohByInstructor = new Map<number, OfficeHour[]>();
+    for (const oh of allOfficeHours) {
+      if (oh.instructorId) {
+        const list = ohByInstructor.get(oh.instructorId) || [];
+        list.push(oh);
+        ohByInstructor.set(oh.instructorId, list);
+      }
+    }
+
+    return allInstructors.map(inst => ({
+      ...inst,
+      courses: coursesByInstructor.get(inst.id) || [],
+      officeHours: ohByInstructor.get(inst.id) || [],
+    }));
   }
 
   async getInstructor(id: number): Promise<Instructor | undefined> {
