@@ -17,8 +17,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Plus, Clock, MapPin, Trash2, CalendarDays, Check, GripVertical, ChevronDown, ChevronUp, Mic, Anchor, Zap, FileText, Save } from "lucide-react";
-import type { PlannedMeeting, Instructor, OfficeHour, Course } from "@shared/schema";
+import { Plus, Clock, MapPin, Trash2, CalendarDays, Check, GripVertical, ChevronDown, ChevronUp, Mic, Anchor, Zap, FileText, Save, DollarSign } from "lucide-react";
+import type { PlannedMeeting, Instructor, OfficeHour, Course, Deal } from "@shared/schema";
 import { InstructorDetailToggle } from "@/components/instructor-detail-popover";
 import { VoiceDictation } from "@/components/voice-dictation";
 import { AudioRecorder } from "@/components/audio-recorder";
@@ -205,6 +205,19 @@ export default function Planner() {
   const { data: instructors = [] } = useQuery<Instructor[]>({
     queryKey: ["/api/instructors"],
   });
+
+  const { data: allDeals = [] } = useQuery<Deal[]>({ queryKey: ["/api/deals"] });
+  const dealsByInstructor = useMemo(() => {
+    const map = new Map<number, Deal[]>();
+    for (const deal of allDeals) {
+      if (deal.instructorId) {
+        const list = map.get(deal.instructorId) || [];
+        list.push(deal);
+        map.set(deal.instructorId, list);
+      }
+    }
+    return map;
+  }, [allDeals]);
 
   const { data: availabilityRows = [] } = useQuery<AvailabilityRow[]>({
     queryKey: ["/api/availability", selectedDayName],
@@ -594,6 +607,7 @@ export default function Planner() {
               <CardContent className="space-y-2">
                 {sortedMeetings.map((meeting) => {
                   const inst = getInstructor(meeting.instructorId);
+                  const instDeals = dealsByInstructor.get(meeting.instructorId) || [];
                   const typeConfig = MEETING_TYPE_CONFIG[meeting.meetingType || "scheduled"] || MEETING_TYPE_CONFIG.scheduled;
                   const TypeIcon = typeConfig.icon;
                   const isExpanded = expandedMeetingId === meeting.id;
@@ -608,6 +622,28 @@ export default function Planner() {
                               <span className="font-medium text-sm truncate" data-testid={`text-meeting-instructor-${meeting.id}`}>
                                 {inst?.name || "Unknown"}
                               </span>
+                              {instDeals.length > 0 && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] py-0 bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 no-default-hover-elevate no-default-active-elevate"
+                                      data-testid={`badge-deals-meeting-${meeting.id}`}
+                                    >
+                                      <DollarSign className="w-2.5 h-2.5 mr-0.5" />
+                                      {instDeals.length}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs">
+                                    <p className="font-semibold text-xs mb-1">Active Deals</p>
+                                    {instDeals.map(d => (
+                                      <p key={d.id} className="text-xs text-muted-foreground">
+                                        {d.dealName}{d.amount ? ` - $${Number(d.amount).toLocaleString()}` : ""}
+                                      </p>
+                                    ))}
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
                               <Badge variant="secondary" className={`text-[10px] py-0 no-default-hover-elevate no-default-active-elevate ${typeConfig.className}`}>
                                 <TypeIcon className="w-2.5 h-2.5 mr-0.5" />
                                 {typeConfig.label}

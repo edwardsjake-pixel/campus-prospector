@@ -44,12 +44,13 @@ Preferred communication style: Simple, everyday language.
 - **Schema Push**: `npm run db:push` uses drizzle-kit to push schema changes directly to the database
 
 ### Database Tables
-- `instructors` — Name, email, department, office location, bio, notes, target priority
+- `instructors` — Name, email, department, institution, office location, bio, notes, target priority
 - `courses` — Code, name, term, format, enrollment, linked to instructor; also stores lecture schedule (daysOfWeek, lectureStartTime, lectureEndTime, building, room)
 - `office_hours` — Day of week, start/end time, location, virtual flag, linked to instructor
 - `visits` — Date, location, notes, linked to user (sales rep)
 - `visit_interactions` — Interactions during visits (linked to visits)
 - `planned_meetings` — Date, start/end time, instructor, location, purpose, status, meetingType (scheduled/drop_in), notes, linked to user
+- `deals` — HubSpot deal data: hubspotDealId, dealName, stage, amount, closeDate, pipeline, linked to instructor; synced from HubSpot CRM
 - `sessions` — Session storage for Replit Auth (mandatory, do not drop)
 - `users` — User storage for Replit Auth (mandatory, do not drop)
 
@@ -95,6 +96,16 @@ Preferred communication style: Simple, everyday language.
 - **vaul** — Drawer component
 - **embla-carousel-react** — Carousel component
 - **cmdk** — Command palette
+
+### HubSpot CRM Integration
+- **Service file**: `server/hubspot.ts` — HubSpot API client for syncing contacts and deals
+- **Integration**: Connected via Replit native HubSpot connector (OAuth-based, auto-refreshing tokens)
+- **Sync scope**: Purdue and Indiana University Bloomington companies
+- **Contact matching**: By email address — matches HubSpot contacts to existing instructors, creates new instructors for unmatched contacts
+- **Institution override**: HubSpot company name overrides the instructor's institution field on sync
+- **Deal import**: Fetches deals associated with matched contacts, stores in `deals` table linked to instructors
+- **API endpoints**: `POST /api/hubspot/sync`, `GET /api/deals`, `GET /api/hubspot/deal-stages`
+- **UI**: "Sync HubSpot" button on Faculty & Courses page, deal pipeline card on Dashboard, deal badges on instructor rows and planner meetings
 
 ### Build Tools
 - **Vite** — Frontend bundler with React plugin and HMR

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Layout } from "@/components/layout";
 import { StatCard } from "@/components/stat-card";
-import { Users, BookOpen, Calendar, ArrowRight, Clock, Anchor, Zap, FileText, Plus, ClipboardList } from "lucide-react";
+import { Users, BookOpen, Calendar, ArrowRight, Clock, Anchor, Zap, FileText, Plus, ClipboardList, DollarSign, Building2 } from "lucide-react";
 import { useInstructors } from "@/hooks/use-instructors";
 import { useCourses } from "@/hooks/use-courses";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { format, startOfWeek, addDays, isToday } from "date-fns";
-import type { PlannedMeeting, Instructor } from "@shared/schema";
+import type { PlannedMeeting, Instructor, Deal } from "@shared/schema";
 
 function getWeekDays(reference: Date): Date[] {
   const monday = startOfWeek(reference, { weekStartsOn: 1 });
@@ -258,6 +258,141 @@ function RecentNotes({
   );
 }
 
+function DealPipeline({
+  deals,
+  stageLabels,
+  instructors,
+}: {
+  deals: Deal[];
+  stageLabels: Record<string, string>;
+  instructors: Instructor[];
+}) {
+  const getInstructor = (id: number | null) => id ? instructors.find(i => i.id === id) : null;
+
+  const stageGroups = useMemo(() => {
+    const groups = new Map<string, { label: string; deals: Deal[]; total: number }>();
+    for (const deal of deals) {
+      const stageKey = deal.stage || "unknown";
+      const label = stageLabels[stageKey] || stageKey;
+      if (!groups.has(stageKey)) {
+        groups.set(stageKey, { label, deals: [], total: 0 });
+      }
+      const group = groups.get(stageKey)!;
+      group.deals.push(deal);
+      group.total += Number(deal.amount) || 0;
+    }
+    return Array.from(groups.values()).sort((a, b) => b.total - a.total);
+  }, [deals, stageLabels]);
+
+  const totalValue = deals.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+
+  if (deals.length === 0) return null;
+
+  return (
+    <Card data-testid="card-deal-pipeline">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <DollarSign className="w-4 h-4" />
+          Deal Pipeline
+        </CardTitle>
+        <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate" data-testid="text-deal-pipeline-total">
+          ${totalValue.toLocaleString()}
+        </Badge>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {stageGroups.map((group) => (
+          <div key={group.label} className="p-2 rounded-md border" data-testid={`pipeline-stage-${group.label}`}>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="text-sm font-medium truncate">{group.label}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <Badge variant="secondary" className="text-[10px] py-0 no-default-hover-elevate no-default-active-elevate" data-testid={`text-stage-deal-count-${group.label}`}>
+                  {group.deals.length} deal{group.deals.length > 1 ? "s" : ""}
+                </Badge>
+                {group.total > 0 && (
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    ${group.total.toLocaleString()}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {group.deals.slice(0, 4).map((deal) => {
+                const inst = getInstructor(deal.instructorId);
+                return (
+                  <Tooltip key={deal.id}>
+                    <TooltipTrigger asChild>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 no-default-hover-elevate no-default-active-elevate"
+                        data-testid={`deal-badge-${deal.id}`}
+                      >
+                        {deal.dealName}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="font-semibold text-sm">{deal.dealName}</p>
+                      {inst && <p className="text-xs text-muted-foreground">{inst.name}</p>}
+                      {deal.amount && <p className="text-xs">${Number(deal.amount).toLocaleString()}</p>}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+              {group.deals.length > 4 && (
+                <span className="text-[10px] text-muted-foreground self-center">+{group.deals.length - 4} more</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function InstitutionBreakdown({ instructors }: { instructors: Instructor[] }) {
+  const groups = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const inst of instructors) {
+      const key = inst.institution || "Unknown";
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
+  }, [instructors]);
+
+  if (groups.length <= 1) return null;
+
+  return (
+    <Card data-testid="card-institution-breakdown">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Building2 className="w-4 h-4" />
+          By Institution
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-1.5">
+        {groups.map(([name, count]) => {
+          const pct = Math.round((count / instructors.length) * 100);
+          return (
+            <div key={name} data-testid={`institution-row-${name}`}>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="truncate">{name}</span>
+                <span className="text-xs text-muted-foreground shrink-0" data-testid={`text-institution-count-${name}`}>{count} ({pct}%)</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted mt-0.5">
+                <div
+                  className="h-full rounded-full bg-primary/60"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 function QuickActions() {
   const [, setLocation] = useLocation();
   const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
@@ -302,9 +437,12 @@ export default function Dashboard() {
   const { data: allMeetings, isLoading: meetingsLoading } = useQuery<PlannedMeeting[]>({
     queryKey: ["/api/planned-meetings"],
   });
+  const { data: allDeals } = useQuery<Deal[]>({ queryKey: ["/api/deals"] });
+  const { data: dealStageLabels } = useQuery<Record<string, string>>({ queryKey: ["/api/hubspot/deal-stages"] });
 
   const weekDays = useMemo(() => getWeekDays(new Date()), []);
   const meetings = allMeetings || [];
+  const deals = allDeals || [];
 
   const totalStudents = courses?.reduce((acc, curr) => acc + (curr.enrollment || 0), 0) || 0;
 
@@ -372,6 +510,19 @@ export default function Dashboard() {
             <TodaysAgenda meetings={meetings} instructors={instructors || []} />
             <RecentNotes meetings={meetings} instructors={instructors || []} />
           </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {deals.length > 0 && (
+          <DealPipeline
+            deals={deals}
+            stageLabels={dealStageLabels || {}}
+            instructors={instructors || []}
+          />
+        )}
+        {instructors && instructors.length > 0 && (
+          <InstitutionBreakdown instructors={instructors} />
         )}
       </div>
     </Layout>
