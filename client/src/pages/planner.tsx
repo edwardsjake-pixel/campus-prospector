@@ -17,9 +17,11 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Plus, Clock, MapPin, Trash2, CalendarDays, Check, GripVertical } from "lucide-react";
+import { Plus, Clock, MapPin, Trash2, CalendarDays, Check, GripVertical, ChevronDown, ChevronUp, Mic, Anchor, Zap, FileText, Save } from "lucide-react";
 import type { PlannedMeeting, Instructor, OfficeHour, Course } from "@shared/schema";
 import { InstructorDetailToggle } from "@/components/instructor-detail-popover";
+import { VoiceDictation } from "@/components/voice-dictation";
+import { AudioRecorder } from "@/components/audio-recorder";
 
 const HOUR_START = 7;
 const HOUR_END = 21;
@@ -104,6 +106,7 @@ function TimeBlock({
   label,
   sublabel,
   variant,
+  borderOverride,
 }: {
   startMin: number;
   endMin: number;
@@ -111,18 +114,19 @@ function TimeBlock({
   label: string;
   sublabel?: string;
   variant: "office" | "lecture" | "available" | "meeting";
+  borderOverride?: string;
 }) {
   const left = minutesToPosition(startMin);
   const width = minutesToWidth(startMin, endMin);
   if (width <= 0) return null;
 
-  const borderClass = variant === "office"
+  const borderClass = borderOverride || (variant === "office"
     ? "border-emerald-400/50"
     : variant === "lecture"
     ? "border-blue-400/50"
     : variant === "meeting"
     ? "border-purple-400/60"
-    : "border-amber-300/40";
+    : "border-amber-300/40");
 
   return (
     <Tooltip>
@@ -161,6 +165,7 @@ const meetingFormSchema = z.object({
   location: z.string().optional(),
   purpose: z.string().optional(),
   notes: z.string().optional(),
+  meetingType: z.string().default("scheduled"),
 }).refine(data => data.endTime > data.startTime, {
   message: "End time must be after start time",
   path: ["endTime"],
@@ -172,6 +177,11 @@ const STATUS_COLORS: Record<string, string> = {
   planned: "bg-purple-100 text-purple-700",
   completed: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-700",
+};
+
+const MEETING_TYPE_CONFIG: Record<string, { label: string; icon: typeof Anchor; className: string }> = {
+  scheduled: { label: "Scheduled", icon: Anchor, className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  drop_in: { label: "Drop-in", icon: Zap, className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" },
 };
 
 export default function Planner() {
@@ -207,6 +217,9 @@ export default function Planner() {
 
   const getInstructor = (id: number) => instructors.find(i => i.id === id);
 
+  const [expandedMeetingId, setExpandedMeetingId] = useState<number | null>(null);
+  const [meetingNotes, setMeetingNotes] = useState<Record<number, string>>({});
+
   const form = useForm<MeetingFormValues>({
     resolver: zodResolver(meetingFormSchema),
     defaultValues: {
@@ -216,6 +229,24 @@ export default function Planner() {
       location: "",
       purpose: "",
       notes: "",
+      meetingType: "scheduled",
+    },
+  });
+
+  const updateNotesMutation = useMutation({
+    mutationFn: async ({ id, notes }: { id: number; notes: string }) =>
+      apiRequest("PUT", `/api/planned-meetings/${id}`, { notes }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/planned-meetings", selectedDateStr] });
+      setMeetingNotes(prev => {
+        const next = { ...prev };
+        delete next[variables.id];
+        return next;
+      });
+      toast({ title: "Notes saved", description: "Meeting notes updated." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to save notes.", variant: "destructive" });
     },
   });
 
@@ -479,6 +510,37 @@ export default function Planner() {
                 />
                 <FormField
                   control={form.control}
+                  name="meetingType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Meeting Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "scheduled"}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-meeting-type">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="scheduled">
+                            <span className="flex items-center gap-1.5">
+                              <Anchor className="w-3.5 h-3.5" />
+                              Scheduled — confirmed appointment
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="drop_in">
+                            <span className="flex items-center gap-1.5">
+                              <Zap className="w-3.5 h-3.5" />
+                              Drop-in — flexible, no appointment
+                            </span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="purpose"
                   render={({ field }) => (
                     <FormItem>
@@ -532,55 +594,124 @@ export default function Planner() {
               <CardContent className="space-y-2">
                 {sortedMeetings.map((meeting) => {
                   const inst = getInstructor(meeting.instructorId);
+                  const typeConfig = MEETING_TYPE_CONFIG[meeting.meetingType || "scheduled"] || MEETING_TYPE_CONFIG.scheduled;
+                  const TypeIcon = typeConfig.icon;
+                  const isExpanded = expandedMeetingId === meeting.id;
+                  const currentNotes = meetingNotes[meeting.id] ?? meeting.notes ?? "";
+
                   return (
-                    <div key={meeting.id} className="p-2 rounded-md border" data-testid={`meeting-card-${meeting.id}`}>
-                      <div className="flex items-start justify-between gap-1">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-medium text-sm truncate" data-testid={`text-meeting-instructor-${meeting.id}`}>
-                              {inst?.name || "Unknown"}
-                            </span>
-                            <Badge variant="secondary" className={`text-[10px] py-0 ${STATUS_COLORS[meeting.status || "planned"] || ""}`}>
-                              {meeting.status || "planned"}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
-                            <span className="flex items-center gap-0.5">
-                              <Clock className="w-3 h-3" />
-                              {meeting.startTime.slice(0, 5)} – {meeting.endTime.slice(0, 5)}
-                            </span>
-                            {meeting.location && (
-                              <span className="flex items-center gap-0.5">
-                                <MapPin className="w-3 h-3" />
-                                {meeting.location}
+                    <div key={meeting.id} className="rounded-md border" data-testid={`meeting-card-${meeting.id}`}>
+                      <div className="p-2">
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-medium text-sm truncate" data-testid={`text-meeting-instructor-${meeting.id}`}>
+                                {inst?.name || "Unknown"}
                               </span>
+                              <Badge variant="secondary" className={`text-[10px] py-0 no-default-hover-elevate no-default-active-elevate ${typeConfig.className}`}>
+                                <TypeIcon className="w-2.5 h-2.5 mr-0.5" />
+                                {typeConfig.label}
+                              </Badge>
+                              <Badge variant="secondary" className={`text-[10px] py-0 no-default-hover-elevate no-default-active-elevate ${STATUS_COLORS[meeting.status || "planned"] || ""}`}>
+                                {meeting.status || "planned"}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
+                              <span className="flex items-center gap-0.5">
+                                <Clock className="w-3 h-3" />
+                                {meeting.startTime.slice(0, 5)} – {meeting.endTime.slice(0, 5)}
+                              </span>
+                              {meeting.location && (
+                                <span className="flex items-center gap-0.5">
+                                  <MapPin className="w-3 h-3" />
+                                  {meeting.location}
+                                </span>
+                              )}
+                            </div>
+                            {meeting.purpose && (
+                              <p className="text-xs mt-0.5 text-muted-foreground">{meeting.purpose}</p>
                             )}
                           </div>
-                          {meeting.purpose && (
-                            <p className="text-xs mt-0.5 text-muted-foreground">{meeting.purpose}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          {meeting.status !== "completed" && (
+                          <div className="flex items-center gap-0.5 shrink-0">
                             <Button
                               size="icon"
                               variant="ghost"
-                              onClick={() => updateStatusMutation.mutate({ id: meeting.id, status: "completed" })}
-                              data-testid={`button-complete-meeting-${meeting.id}`}
+                              onClick={() => {
+                                if (isExpanded) {
+                                  setExpandedMeetingId(null);
+                                } else {
+                                  setExpandedMeetingId(meeting.id);
+                                  if (meetingNotes[meeting.id] === undefined) {
+                                    setMeetingNotes(prev => ({ ...prev, [meeting.id]: meeting.notes || "" }));
+                                  }
+                                }
+                              }}
+                              data-testid={`button-expand-meeting-${meeting.id}`}
                             >
-                              <Check className="w-3.5 h-3.5" />
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
                             </Button>
-                          )}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => deleteMutation.mutate(meeting.id)}
-                            data-testid={`button-delete-meeting-${meeting.id}`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                            {meeting.status !== "completed" && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => updateStatusMutation.mutate({ id: meeting.id, status: "completed" })}
+                                data-testid={`button-complete-meeting-${meeting.id}`}
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => deleteMutation.mutate(meeting.id)}
+                              data-testid={`button-delete-meeting-${meeting.id}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
+
+                      {isExpanded && (
+                        <div className="border-t p-2 space-y-3" data-testid={`meeting-detail-${meeting.id}`}>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium">Meeting Notes</label>
+                              <VoiceDictation
+                                currentText={currentNotes}
+                                onTranscript={(text) => setMeetingNotes(prev => ({ ...prev, [meeting.id]: text }))}
+                              />
+                            </div>
+                            <Textarea
+                              placeholder="Record what was discussed, action items, follow-ups..."
+                              className="min-h-[80px] resize-none text-sm"
+                              value={currentNotes}
+                              onChange={(e) => setMeetingNotes(prev => ({ ...prev, [meeting.id]: e.target.value }))}
+                              data-testid={`textarea-meeting-notes-${meeting.id}`}
+                            />
+                            <div className="flex items-center justify-between mt-1.5">
+                              <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                <Mic className="h-2.5 w-2.5" /> Tap mic to dictate
+                              </p>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={updateNotesMutation.isPending || currentNotes === (meeting.notes || "")}
+                                onClick={() => updateNotesMutation.mutate({ id: meeting.id, notes: currentNotes })}
+                                data-testid={`button-save-notes-${meeting.id}`}
+                              >
+                                <Save className="w-3 h-3 mr-1" />
+                                {updateNotesMutation.isPending ? "Saving..." : "Save Notes"}
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="border-t pt-2">
+                            <label className="text-xs font-medium mb-1.5 block">Record Audio</label>
+                            <AudioRecorder />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -597,7 +728,11 @@ export default function Planner() {
             <div className="flex items-center gap-4 text-xs flex-wrap">
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-sm bg-purple-500/25 border border-purple-400/60" />
-                <span className="text-muted-foreground">Your Meeting</span>
+                <span className="text-muted-foreground">Scheduled</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm bg-amber-400/25 border border-dashed border-amber-400/60" />
+                <span className="text-muted-foreground">Drop-in</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-sm bg-emerald-500/20 border border-emerald-400/50" />
@@ -753,17 +888,27 @@ export default function Planner() {
                               />
                             ))}
 
-                            {row.meetings.map(m => (
-                              <TimeBlock
-                                key={`meeting-${m.id}`}
-                                startMin={timeToMinutes(m.startTime)}
-                                endMin={timeToMinutes(m.endTime)}
-                                color={m.status === "completed" ? "bg-green-500/25 text-green-800" : "bg-purple-500/25 text-purple-800"}
-                                label={m.purpose || "Meeting"}
-                                sublabel={`${formatTime(m.startTime)} - ${formatTime(m.endTime)}${m.location ? ` · ${m.location}` : ""}${m.status === "completed" ? " (Done)" : ""}`}
-                                variant="meeting"
-                              />
-                            ))}
+                            {row.meetings.map(m => {
+                              const isDropIn = m.meetingType === "drop_in";
+                              const meetingColor = m.status === "completed"
+                                ? "bg-green-500/25 text-green-800"
+                                : isDropIn
+                                ? "bg-amber-400/25 text-amber-800 dark:text-amber-200"
+                                : "bg-purple-500/25 text-purple-800";
+                              const typeLabel = isDropIn ? "Drop-in" : "";
+                              return (
+                                <TimeBlock
+                                  key={`meeting-${m.id}`}
+                                  startMin={timeToMinutes(m.startTime)}
+                                  endMin={timeToMinutes(m.endTime)}
+                                  color={meetingColor}
+                                  label={`${typeLabel ? typeLabel + ": " : ""}${m.purpose || "Meeting"}`}
+                                  sublabel={`${isDropIn ? "Drop-in · " : "Scheduled · "}${formatTime(m.startTime)} - ${formatTime(m.endTime)}${m.location ? ` · ${m.location}` : ""}${m.status === "completed" ? " (Done)" : ""}`}
+                                  variant="meeting"
+                                  borderOverride={isDropIn ? "border-dashed border-amber-400/60" : undefined}
+                                />
+                              );
+                            })}
 
                             {isToday && nowPosition >= 0 && nowPosition <= 100 && (
                               <div

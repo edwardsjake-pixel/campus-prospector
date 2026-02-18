@@ -49,7 +49,7 @@ Preferred communication style: Simple, everyday language.
 - `office_hours` — Day of week, start/end time, location, virtual flag, linked to instructor
 - `visits` — Date, location, notes, linked to user (sales rep)
 - `visit_interactions` — Interactions during visits (linked to visits)
-- `planned_meetings` — Date, start/end time, instructor, location, purpose, status, linked to user
+- `planned_meetings` — Date, start/end time, instructor, location, purpose, status, meetingType (scheduled/drop_in), notes, linked to user
 - `sessions` — Session storage for Replit Auth (mandatory, do not drop)
 - `users` — User storage for Replit Auth (mandatory, do not drop)
 
