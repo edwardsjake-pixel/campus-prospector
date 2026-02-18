@@ -72,6 +72,7 @@ export const plannedMeetings = pgTable("planned_meetings", {
   purpose: text("purpose"),
   status: text("status").default("planned"),
   notes: text("notes"),
+  meetingType: text("meeting_type").default("scheduled"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
