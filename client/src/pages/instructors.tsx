@@ -408,36 +408,61 @@ interface HubSpotPreviewContact {
   name: string;
   email: string;
   company: string;
-  deals: { id: string; dealName: string; stage: string | null; amount: string | null }[];
+  deals: { id: string; dealName: string; stage: string | null; amount: string | null; closeDate: string | null; pipeline: string | null }[];
   totalDealValue: number;
+  alreadyImported: boolean;
 }
 
 function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
-  const [preview, setPreview] = useState<HubSpotPreviewContact[]>([]);
+  const { data: dealStageLabels } = useQuery<Record<string, string>>({ queryKey: ["/api/hubspot/deal-stages"] });
+  const [school, setSchool] = useState<string>("both");
+  const [contacts, setContacts] = useState<HubSpotPreviewContact[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [mode, setMode] = useState<"deals" | "search">("deals");
 
   const previewMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (selectedSchool: string) => {
       const res = await apiRequest("POST", "/api/hubspot/import-preview", {
-        companyNames: ["Indiana"],
+        school: selectedSchool,
       });
       return res.json() as Promise<HubSpotPreviewContact[]>;
     },
     onSuccess: (data) => {
-      setPreview(data);
-      setSelected(new Set(data.map(c => c.hubspotContactId)));
+      setContacts(data);
+      setSelected(new Set(data.filter(c => !c.alreadyImported).map(c => c.hubspotContactId)));
       setHasLoaded(true);
+      setMode("deals");
     },
     onError: (err: any) => {
-      toast({ title: "Failed to load preview", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to load contacts", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const searchMutation = useMutation({
+    mutationFn: async ({ selectedSchool, query }: { selectedSchool: string; query: string }) => {
+      const res = await apiRequest("POST", "/api/hubspot/search-contacts", {
+        school: selectedSchool,
+        query,
+      });
+      return res.json() as Promise<HubSpotPreviewContact[]>;
+    },
+    onSuccess: (data) => {
+      setContacts(data);
+      setSelected(new Set(data.filter(c => !c.alreadyImported).map(c => c.hubspotContactId)));
+      setHasLoaded(true);
+      setMode("search");
+    },
+    onError: (err: any) => {
+      toast({ title: "Search failed", description: err.message, variant: "destructive" });
     },
   });
 
   const importMutation = useMutation({
     mutationFn: async () => {
-      const contactsToImport = preview.filter(c => selected.has(c.hubspotContactId));
+      const contactsToImport = contacts.filter(c => selected.has(c.hubspotContactId));
       const res = await apiRequest("POST", "/api/hubspot/import", { contacts: contactsToImport });
       return res.json();
     },
@@ -449,9 +474,6 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         description: `${data.instructorsCreated} contacts imported, ${data.dealsImported} deals added${data.skipped ? `, ${data.skipped} skipped` : ""}`,
       });
       onOpenChange(false);
-      setPreview([]);
-      setSelected(new Set());
-      setHasLoaded(false);
     },
     onError: (err: any) => {
       toast({ title: "Import failed", description: err.message, variant: "destructive" });
@@ -459,23 +481,46 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   });
 
   useEffect(() => {
-    if (open && !hasLoaded && !previewMutation.isPending) {
-      previewMutation.mutate();
-    }
-    if (!open) {
-      setHasLoaded(false);
-      setPreview([]);
+    if (open) {
+      setContacts([]);
       setSelected(new Set());
+      setHasLoaded(false);
+      setSearchInput("");
+      setMode("deals");
+      previewMutation.mutate(school);
     }
   }, [open]);
 
+  const handleSchoolChange = useCallback((value: string) => {
+    setSchool(value);
+    setContacts([]);
+    setSelected(new Set());
+    setHasLoaded(false);
+    setSearchInput("");
+    setMode("deals");
+    previewMutation.mutate(value);
+  }, []);
+
+  const handleSearch = useCallback(() => {
+    if (!searchInput.trim()) return;
+    searchMutation.mutate({ selectedSchool: school, query: searchInput.trim() });
+  }, [school, searchInput]);
+
+  const handleBackToDeals = useCallback(() => {
+    setSearchInput("");
+    setMode("deals");
+    previewMutation.mutate(school);
+  }, [school]);
+
+  const selectableContacts = useMemo(() => contacts.filter(c => !c.alreadyImported), [contacts]);
+
   const toggleAll = useCallback(() => {
-    if (selected.size === preview.length) {
+    if (selected.size === selectableContacts.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(preview.map(c => c.hubspotContactId)));
+      setSelected(new Set(selectableContacts.map(c => c.hubspotContactId)));
     }
-  }, [selected, preview]);
+  }, [selected, selectableContacts]);
 
   const toggleOne = useCallback((id: string) => {
     setSelected(prev => {
@@ -485,25 +530,87 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     });
   }, []);
 
+  const isLoading = previewMutation.isPending || searchMutation.isPending;
+
+  const getStageName = (stageId: string | null) => {
+    if (!stageId) return null;
+    return dealStageLabels?.[stageId] || stageId;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-[800px] max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Import from HubSpot</DialogTitle>
+          <DialogTitle data-testid="text-import-dialog-title">Import from HubSpot</DialogTitle>
           <DialogDescription>
-            Contacts with active deals in Indiana. Only new contacts (not already in CampusAlly) are shown.
+            {mode === "deals"
+              ? "Contacts with open or closed-won deals. Closed-lost deals are excluded."
+              : `Search results for "${searchInput}"`}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-auto min-h-0">
-          {previewMutation.isPending ? (
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Label className="text-sm whitespace-nowrap">School:</Label>
+            <Select value={school} onValueChange={handleSchoolChange} data-testid="select-school">
+              <SelectTrigger className="w-[200px]" data-testid="select-school-trigger">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="both" data-testid="select-school-both">Both Schools</SelectItem>
+                <SelectItem value="purdue" data-testid="select-school-purdue">Purdue University</SelectItem>
+                <SelectItem value="iu" data-testid="select-school-iu">IU Bloomington</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-1 flex-1 min-w-[200px]">
+            <Input
+              placeholder="Search contacts by name or email..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              data-testid="input-hubspot-search"
+            />
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={handleSearch}
+              disabled={!searchInput.trim() || isLoading}
+              data-testid="button-hubspot-search"
+            >
+              <Search className="w-4 h-4" />
+            </Button>
+          </div>
+          {mode === "search" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleBackToDeals}
+              disabled={isLoading}
+              data-testid="button-back-to-deals"
+            >
+              <DollarSign className="w-3 h-3 mr-1" />
+              Show deals
+            </Button>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-auto min-h-0 border rounded-md">
+          {isLoading ? (
             <div className="flex items-center justify-center py-12" data-testid="loading-hubspot-preview">
               <Loader2 className="w-6 h-6 animate-spin mr-2" />
-              <span className="text-sm text-muted-foreground">Loading contacts from HubSpot...</span>
+              <span className="text-sm text-muted-foreground">
+                {mode === "search" ? "Searching HubSpot..." : "Loading contacts from HubSpot..."}
+              </span>
             </div>
-          ) : preview.length === 0 && hasLoaded ? (
+          ) : contacts.length === 0 && hasLoaded ? (
             <div className="text-center py-12 text-muted-foreground" data-testid="text-no-contacts">
-              <p className="text-sm">No new contacts with deals found.</p>
-              <p className="text-xs mt-1">All HubSpot contacts with Indiana deals are already in CampusAlly.</p>
+              <p className="text-sm">
+                {mode === "search"
+                  ? `No contacts found matching "${searchInput}".`
+                  : "No contacts with open or won deals found at this school."}
+              </p>
+              <p className="text-xs mt-1">Try searching for a specific contact by name above.</p>
             </div>
           ) : (
             <Table>
@@ -511,8 +618,9 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 <TableRow>
                   <TableHead className="w-10">
                     <Checkbox
-                      checked={selected.size === preview.length && preview.length > 0}
+                      checked={selectableContacts.length > 0 && selected.size === selectableContacts.length}
                       onCheckedChange={toggleAll}
+                      disabled={selectableContacts.length === 0}
                       data-testid="checkbox-select-all"
                     />
                   </TableHead>
@@ -523,18 +631,31 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {preview.map((contact) => (
-                  <TableRow key={contact.hubspotContactId} data-testid={`row-import-contact-${contact.hubspotContactId}`}>
+                {contacts.map((contact) => (
+                  <TableRow
+                    key={contact.hubspotContactId}
+                    className={contact.alreadyImported ? "opacity-50" : ""}
+                    data-testid={`row-import-contact-${contact.hubspotContactId}`}
+                  >
                     <TableCell>
-                      <Checkbox
-                        checked={selected.has(contact.hubspotContactId)}
-                        onCheckedChange={() => toggleOne(contact.hubspotContactId)}
-                        data-testid={`checkbox-contact-${contact.hubspotContactId}`}
-                      />
+                      {contact.alreadyImported ? (
+                        <Check className="w-4 h-4 text-muted-foreground" />
+                      ) : (
+                        <Checkbox
+                          checked={selected.has(contact.hubspotContactId)}
+                          onCheckedChange={() => toggleOne(contact.hubspotContactId)}
+                          data-testid={`checkbox-contact-${contact.hubspotContactId}`}
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
                       <div>
-                        <p className="font-medium text-sm" data-testid={`text-contact-name-${contact.hubspotContactId}`}>{contact.name}</p>
+                        <p className="font-medium text-sm" data-testid={`text-contact-name-${contact.hubspotContactId}`}>
+                          {contact.name}
+                          {contact.alreadyImported && (
+                            <span className="text-xs text-muted-foreground ml-1">(imported)</span>
+                          )}
+                        </p>
                         <p className="text-xs text-muted-foreground">{contact.email}</p>
                       </div>
                     </TableCell>
@@ -542,18 +663,25 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                       <span className="text-sm" data-testid={`text-contact-company-${contact.hubspotContactId}`}>{contact.company}</span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {contact.deals.map(d => (
-                          <Badge
-                            key={d.id}
-                            variant="outline"
-                            className="text-[10px] bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 no-default-hover-elevate no-default-active-elevate"
-                            data-testid={`badge-preview-deal-${d.id}`}
-                          >
-                            {d.dealName}
-                          </Badge>
-                        ))}
-                      </div>
+                      {contact.deals.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {contact.deals.map(d => (
+                            <Badge
+                              key={d.id}
+                              variant="outline"
+                              className="text-[10px] bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 no-default-hover-elevate no-default-active-elevate"
+                              data-testid={`badge-preview-deal-${d.id}`}
+                            >
+                              {d.dealName}
+                              {getStageName(d.stage) && (
+                                <span className="ml-1 opacity-70">({getStageName(d.stage)})</span>
+                              )}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No active deals</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right text-sm font-medium" data-testid={`text-contact-value-${contact.hubspotContactId}`}>
                       {contact.totalDealValue > 0 ? `$${contact.totalDealValue.toLocaleString()}` : "—"}
@@ -564,25 +692,25 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             </Table>
           )}
         </div>
-        {preview.length > 0 && (
-          <div className="flex items-center justify-between gap-2 pt-2 border-t">
-            <p className="text-sm text-muted-foreground" data-testid="text-selected-count">
-              {selected.size} of {preview.length} selected
-            </p>
-            <Button
-              onClick={() => importMutation.mutate()}
-              disabled={selected.size === 0 || importMutation.isPending}
-              data-testid="button-import-selected"
-            >
-              {importMutation.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4 mr-2" />
-              )}
-              {importMutation.isPending ? "Importing..." : `Import ${selected.size} Contact${selected.size !== 1 ? "s" : ""}`}
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center justify-between gap-2 pt-2 border-t">
+          <p className="text-sm text-muted-foreground" data-testid="text-selected-count">
+            {selected.size > 0
+              ? `${selected.size} of ${selectableContacts.length} selected`
+              : `${contacts.length} contact${contacts.length !== 1 ? "s" : ""} found`}
+          </p>
+          <Button
+            onClick={() => importMutation.mutate()}
+            disabled={selected.size === 0 || importMutation.isPending}
+            data-testid="button-import-selected"
+          >
+            {importMutation.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            {importMutation.isPending ? "Importing..." : `Import ${selected.size} Contact${selected.size !== 1 ? "s" : ""}`}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

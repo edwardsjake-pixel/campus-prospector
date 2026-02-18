@@ -55,7 +55,15 @@ interface HubSpotDeal {
   dealName: string;
   stage: string | null;
   amount: string | null;
+  closeDate: string | null;
+  pipeline: string | null;
 }
+
+const SCHOOL_COMPANY_MAP: Record<string, string[]> = {
+  purdue: ["Purdue"],
+  iu: ["Indiana University Bloomington"],
+  both: ["Purdue", "Indiana University Bloomington"],
+};
 
 export interface HubSpotSyncResult {
   contactsFound: number;
@@ -125,13 +133,15 @@ async function getDealsForContact(client: Client, contactId: string): Promise<Hu
       try {
         const deal = await client.crm.deals.basicApi.getById(
           assoc.id,
-          ['dealname', 'dealstage', 'amount']
+          ['dealname', 'dealstage', 'amount', 'closedate', 'pipeline']
         );
         deals.push({
           id: deal.id,
           dealName: deal.properties.dealname || 'Untitled Deal',
           stage: deal.properties.dealstage || null,
           amount: deal.properties.amount || null,
+          closeDate: deal.properties.closedate || null,
+          pipeline: deal.properties.pipeline || null,
         });
       } catch (e) {
         console.error(`Failed to fetch deal ${assoc.id}:`, e);
@@ -233,6 +243,8 @@ export async function syncHubSpotData(
               dealName: deal.dealName,
               stage: deal.stage,
               amount: deal.amount,
+              closeDate: deal.closeDate,
+              pipeline: deal.pipeline,
               instructorId,
               hubspotContactId: contact.id,
             });
@@ -253,16 +265,25 @@ export interface HubSpotImportPreviewContact {
   name: string;
   email: string;
   company: string;
-  deals: { id: string; dealName: string; stage: string | null; amount: string | null }[];
+  deals: { id: string; dealName: string; stage: string | null; amount: string | null; closeDate: string | null; pipeline: string | null }[];
   totalDealValue: number;
+  alreadyImported: boolean;
+}
+
+function isClosedLostStage(stageLabel: string | null): boolean {
+  if (!stageLabel) return false;
+  const lower = stageLabel.toLowerCase().replace(/[^a-z]/g, '');
+  return lower.includes('closedlost') || lower === 'nopurchase';
 }
 
 export async function fetchImportPreview(
-  companyNames: string[],
+  school: string,
   existingEmails: Set<string>,
+  stageLabels: Record<string, string>,
 ): Promise<HubSpotImportPreviewContact[]> {
   const client = await getUncachableHubSpotClient();
   const results: HubSpotImportPreviewContact[] = [];
+  const companyNames = SCHOOL_COMPANY_MAP[school] || SCHOOL_COMPANY_MAP['both'];
 
   for (const companyName of companyNames) {
     try {
@@ -273,26 +294,88 @@ export async function fetchImportPreview(
 
         for (const contact of contacts) {
           if (!contact.email) continue;
-          if (existingEmails.has(contact.email.toLowerCase())) continue;
 
           const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
           if (!fullName) continue;
 
           const contactDeals = await getDealsForContact(client, contact.id);
-          if (contactDeals.length === 0) continue;
+          const filteredDeals = contactDeals.filter(d => {
+            const label = d.stage ? (stageLabels[d.stage] || d.stage) : '';
+            return !isClosedLostStage(label);
+          });
+
+          if (filteredDeals.length === 0) continue;
+
+          const alreadyImported = existingEmails.has(contact.email.toLowerCase());
 
           results.push({
             hubspotContactId: contact.id,
             name: fullName,
             email: contact.email,
             company: realCompanyName,
-            deals: contactDeals,
-            totalDealValue: contactDeals.reduce((sum, d) => sum + (Number(d.amount) || 0), 0),
+            deals: filteredDeals,
+            totalDealValue: filteredDeals.reduce((sum, d) => sum + (Number(d.amount) || 0), 0),
+            alreadyImported,
           });
         }
       }
     } catch (e: any) {
       console.error(`Preview error for "${companyName}":`, e.message);
+    }
+  }
+
+  return results;
+}
+
+export async function searchHubSpotContacts(
+  school: string,
+  searchQuery: string,
+  existingEmails: Set<string>,
+  stageLabels: Record<string, string>,
+): Promise<HubSpotImportPreviewContact[]> {
+  const client = await getUncachableHubSpotClient();
+  const results: HubSpotImportPreviewContact[] = [];
+  const companyNames = SCHOOL_COMPANY_MAP[school] || SCHOOL_COMPANY_MAP['both'];
+
+  for (const companyName of companyNames) {
+    try {
+      const companies = await searchCompaniesByName(client, companyName);
+      for (const company of companies) {
+        const realCompanyName = await getCompanyName(client, company.id) || company.name;
+        const contacts = await getContactsForCompany(client, company.id);
+
+        for (const contact of contacts) {
+          if (!contact.email) continue;
+
+          const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
+          if (!fullName) continue;
+
+          const queryLower = searchQuery.toLowerCase();
+          if (!fullName.toLowerCase().includes(queryLower) && !contact.email.toLowerCase().includes(queryLower)) {
+            continue;
+          }
+
+          const contactDeals = await getDealsForContact(client, contact.id);
+          const filteredDeals = contactDeals.filter(d => {
+            const label = d.stage ? (stageLabels[d.stage] || d.stage) : '';
+            return !isClosedLostStage(label);
+          });
+
+          const alreadyImported = existingEmails.has(contact.email.toLowerCase());
+
+          results.push({
+            hubspotContactId: contact.id,
+            name: fullName,
+            email: contact.email,
+            company: realCompanyName,
+            deals: filteredDeals,
+            totalDealValue: filteredDeals.reduce((sum, d) => sum + (Number(d.amount) || 0), 0),
+            alreadyImported,
+          });
+        }
+      }
+    } catch (e: any) {
+      console.error(`Search error for "${companyName}" query "${searchQuery}":`, e.message);
     }
   }
 
@@ -313,17 +396,23 @@ export async function importSelectedContacts(
 
   for (const contact of contacts) {
     const existing = await storage.getInstructorByEmail(contact.email);
-    if (existing) {
-      skipped++;
-      continue;
-    }
+    let instructorId: number;
 
-    const newInstructor = await storage.createInstructor({
-      name: contact.name,
-      email: contact.email,
-      institution: contact.company,
-    });
-    instructorsCreated++;
+    if (existing) {
+      instructorId = existing.id;
+      if (contact.deals.length === 0) {
+        skipped++;
+        continue;
+      }
+    } else {
+      const newInstructor = await storage.createInstructor({
+        name: contact.name,
+        email: contact.email,
+        institution: contact.company,
+      });
+      instructorId = newInstructor.id;
+      instructorsCreated++;
+    }
 
     for (const deal of contact.deals) {
       await storage.upsertDeal({
@@ -331,7 +420,9 @@ export async function importSelectedContacts(
         dealName: deal.dealName,
         stage: deal.stage,
         amount: deal.amount,
-        instructorId: newInstructor.id,
+        closeDate: deal.closeDate,
+        pipeline: deal.pipeline,
+        instructorId,
         hubspotContactId: contact.hubspotContactId,
       });
       dealsImported++;

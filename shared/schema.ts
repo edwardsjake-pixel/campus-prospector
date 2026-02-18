@@ -82,6 +82,8 @@ export const deals = pgTable("deals", {
   dealName: text("deal_name").notNull(),
   stage: text("stage"),
   amount: text("amount"),
+  closeDate: text("close_date"),
+  pipeline: text("pipeline"),
   instructorId: integer("instructor_id").references(() => instructors.id),
   hubspotContactId: text("hubspot_contact_id"),
   lastSyncedAt: timestamp("last_synced_at").defaultNow(),

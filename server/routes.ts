@@ -6,7 +6,7 @@ import { registerAuthRoutes } from "./replit_integrations/auth";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { insertInstructorSchema, insertCourseSchema, insertOfficeHourSchema, insertVisitSchema, insertVisitInteractionSchema, insertPlannedMeetingSchema } from "@shared/schema";
-import { syncHubSpotData, fetchDealStageLabels, fetchImportPreview, importSelectedContacts, type HubSpotImportPreviewContact } from "./hubspot";
+import { syncHubSpotData, fetchDealStageLabels, fetchImportPreview, importSelectedContacts, searchHubSpotContacts, type HubSpotImportPreviewContact } from "./hubspot";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -479,9 +479,9 @@ export async function registerRoutes(
   app.post("/api/hubspot/import-preview", async (req, res) => {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const companyNames = req.body.companyNames as string[];
-      if (!Array.isArray(companyNames) || companyNames.length === 0) {
-        return res.status(400).json({ message: "companyNames array is required" });
+      const school = (req.body.school as string) || 'both';
+      if (!['purdue', 'iu', 'both'].includes(school)) {
+        return res.status(400).json({ message: "school must be 'purdue', 'iu', or 'both'" });
       }
       const allInstructors = await storage.getInstructors();
       const existingEmails = new Set(
@@ -489,11 +489,38 @@ export async function registerRoutes(
           .map(i => i.email?.toLowerCase())
           .filter((e): e is string => !!e)
       );
-      const preview = await fetchImportPreview(companyNames, existingEmails);
+      const stageLabels = await fetchDealStageLabels();
+      const preview = await fetchImportPreview(school, existingEmails, stageLabels);
       res.json(preview);
     } catch (error: any) {
       console.error("HubSpot import preview error:", error);
       res.status(500).json({ message: error.message || "Failed to fetch import preview" });
+    }
+  });
+
+  app.post("/api/hubspot/search-contacts", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const school = (req.body.school as string) || 'both';
+      const query = (req.body.query as string) || '';
+      if (!query.trim()) {
+        return res.status(400).json({ message: "query is required" });
+      }
+      if (!['purdue', 'iu', 'both'].includes(school)) {
+        return res.status(400).json({ message: "school must be 'purdue', 'iu', or 'both'" });
+      }
+      const allInstructors = await storage.getInstructors();
+      const existingEmails = new Set(
+        allInstructors
+          .map(i => i.email?.toLowerCase())
+          .filter((e): e is string => !!e)
+      );
+      const stageLabels = await fetchDealStageLabels();
+      const results = await searchHubSpotContacts(school, query, existingEmails, stageLabels);
+      res.json(results);
+    } catch (error: any) {
+      console.error("HubSpot search contacts error:", error);
+      res.status(500).json({ message: error.message || "Failed to search contacts" });
     }
   });
 
