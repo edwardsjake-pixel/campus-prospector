@@ -87,14 +87,15 @@ async function getContactsForCompany(client: Client, companyId: string): Promise
   let after: string | undefined;
 
   do {
-    const response = await client.crm.companies.associationsApi.getAll(
+    const response = await client.crm.associations.v4.basicApi.getPage(
+      'companies',
       companyId,
       'contacts',
-      after ? after : undefined,
+      after,
       100,
     );
 
-    const contactIds = response.results.map((r: any) => r.id);
+    const contactIds = response.results.map((r: any) => r.toObjectId);
 
     for (const contactId of contactIds) {
       try {
@@ -114,7 +115,7 @@ async function getContactsForCompany(client: Client, companyId: string): Promise
       }
     }
 
-    after = (response as any).paging?.next?.after;
+    after = response.paging?.next?.after;
   } while (after);
 
   return contacts;
@@ -124,15 +125,17 @@ async function getDealsForContact(client: Client, contactId: string): Promise<Hu
   const deals: HubSpotDeal[] = [];
 
   try {
-    const response = await client.crm.contacts.associationsApi.getAll(
+    const response = await client.crm.associations.v4.basicApi.getPage(
+      'contacts',
       contactId,
       'deals',
     );
 
     for (const assoc of response.results) {
+      const dealId = (assoc as any).toObjectId || assoc.id;
       try {
         const deal = await client.crm.deals.basicApi.getById(
-          assoc.id,
+          dealId,
           ['dealname', 'dealstage', 'amount', 'closedate', 'pipeline']
         );
         deals.push({
@@ -144,7 +147,7 @@ async function getDealsForContact(client: Client, contactId: string): Promise<Hu
           pipeline: deal.properties.pipeline || null,
         });
       } catch (e) {
-        console.error(`Failed to fetch deal ${assoc.id}:`, e);
+        console.error(`Failed to fetch deal ${dealId}:`, e);
       }
     }
   } catch (e) {
