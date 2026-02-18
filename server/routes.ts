@@ -489,8 +489,9 @@ export async function registerRoutes(
           .map(i => i.email?.toLowerCase())
           .filter((e): e is string => !!e)
       );
+      const recentOnly = req.body.recentOnly === true;
       const stageLabels = await fetchDealStageLabels();
-      const preview = await fetchImportPreview(school, existingEmails, stageLabels);
+      const preview = await fetchImportPreview(school, existingEmails, stageLabels, recentOnly);
       res.json(preview);
     } catch (error: any) {
       console.error("HubSpot import preview error:", error);
@@ -515,8 +516,9 @@ export async function registerRoutes(
           .map(i => i.email?.toLowerCase())
           .filter((e): e is string => !!e)
       );
+      const recentOnly = req.body.recentOnly === true;
       const stageLabels = await fetchDealStageLabels();
-      const results = await searchHubSpotContacts(school, query, existingEmails, stageLabels);
+      const results = await searchHubSpotContacts(school, query, existingEmails, stageLabels, recentOnly);
       res.json(results);
     } catch (error: any) {
       console.error("HubSpot search contacts error:", error);
@@ -535,6 +537,8 @@ export async function registerRoutes(
         getInstructorByEmail: (email) => storage.getInstructorByEmail(email),
         createInstructor: (data) => storage.createInstructor(data),
         upsertDeal: (data) => storage.upsertDeal(data),
+        createCourse: (data) => storage.createCourse(data),
+        getCoursesByInstructor: (instructorId) => storage.getCourses(instructorId),
       });
       res.json(result);
     } catch (error: any) {

@@ -421,18 +421,21 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [hasLoaded, setHasLoaded] = useState(false);
   const [searchInput, setSearchInput] = useState("");
+  const [recentOnly, setRecentOnly] = useState(true);
 
   const fetchContacts = useMutation({
-    mutationFn: async ({ selectedSchool, query }: { selectedSchool: string; query: string }) => {
+    mutationFn: async ({ selectedSchool, query, recent }: { selectedSchool: string; query: string; recent: boolean }) => {
       if (query.trim()) {
         const res = await apiRequest("POST", "/api/hubspot/search-contacts", {
           school: selectedSchool,
           query: query.trim(),
+          recentOnly: recent,
         });
         return res.json() as Promise<HubSpotPreviewContact[]>;
       } else {
         const res = await apiRequest("POST", "/api/hubspot/import-preview", {
           school: selectedSchool,
+          recentOnly: recent,
         });
         return res.json() as Promise<HubSpotPreviewContact[]>;
       }
@@ -456,9 +459,10 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
       queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
       toast({
         title: "Import complete",
-        description: `${data.instructorsCreated} contacts imported, ${data.dealsImported} deals added${data.skipped ? `, ${data.skipped} skipped` : ""}`,
+        description: `${data.instructorsCreated} contacts imported, ${data.dealsImported} deals added${data.coursesCreated ? `, ${data.coursesCreated} courses created` : ""}${data.skipped ? `, ${data.skipped} skipped` : ""}`,
       });
       onOpenChange(false);
     },
@@ -473,7 +477,8 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       setSelected(new Set());
       setHasLoaded(false);
       setSearchInput("");
-      fetchContacts.mutate({ selectedSchool: school, query: "" });
+      setRecentOnly(true);
+      fetchContacts.mutate({ selectedSchool: school, query: "", recent: true });
     }
   }, [open]);
 
@@ -482,14 +487,22 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     setContacts([]);
     setSelected(new Set());
     setHasLoaded(false);
-    fetchContacts.mutate({ selectedSchool: value, query: searchInput });
-  }, [searchInput]);
+    fetchContacts.mutate({ selectedSchool: value, query: searchInput, recent: recentOnly });
+  }, [searchInput, recentOnly]);
 
   const handleSearch = useCallback(() => {
     setContacts([]);
     setSelected(new Set());
     setHasLoaded(false);
-    fetchContacts.mutate({ selectedSchool: school, query: searchInput });
+    fetchContacts.mutate({ selectedSchool: school, query: searchInput, recent: recentOnly });
+  }, [school, searchInput, recentOnly]);
+
+  const handleRecentOnlyChange = useCallback((checked: boolean) => {
+    setRecentOnly(checked);
+    setContacts([]);
+    setSelected(new Set());
+    setHasLoaded(false);
+    fetchContacts.mutate({ selectedSchool: school, query: searchInput, recent: checked });
   }, [school, searchInput]);
 
   const handleClearSearch = useCallback(() => {
@@ -497,8 +510,8 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     setContacts([]);
     setSelected(new Set());
     setHasLoaded(false);
-    fetchContacts.mutate({ selectedSchool: school, query: "" });
-  }, [school]);
+    fetchContacts.mutate({ selectedSchool: school, query: "", recent: recentOnly });
+  }, [school, recentOnly]);
 
   const selectableContacts = useMemo(() => contacts.filter(c => !c.alreadyImported), [contacts]);
 
@@ -577,6 +590,18 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               <SelectItem value="iu" data-testid="select-school-iu">IU Bloomington</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="recent-only"
+            checked={recentOnly}
+            onCheckedChange={(checked) => handleRecentOnlyChange(checked === true)}
+            data-testid="checkbox-recent-only"
+          />
+          <label htmlFor="recent-only" className="text-sm text-muted-foreground cursor-pointer">
+            Recent deals only (open + most recent closed-won)
+          </label>
         </div>
 
         <div className="flex-1 overflow-auto min-h-0 border rounded-md">
@@ -1076,7 +1101,10 @@ export default function Instructors() {
                           {instructorDeals.length > 0 ? (
                             <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800">
                               <DollarSign className="w-3 h-3 mr-1" />
-                              {instructorDeals.length}
+                              {(() => {
+                                const total = instructorDeals.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+                                return `$${total.toLocaleString()}`;
+                              })()}
                             </Badge>
                           ) : (
                             <span className="text-xs text-muted-foreground">--</span>

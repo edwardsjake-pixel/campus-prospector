@@ -284,10 +284,41 @@ function isClosedLostStage(stageLabel: string | null): boolean {
   return lower.includes('closedlost') || lower === 'nopurchase';
 }
 
+function isClosedWonStage(stageLabel: string | null): boolean {
+  if (!stageLabel) return false;
+  const lower = stageLabel.toLowerCase().replace(/[^a-z]/g, '');
+  return lower.includes('closedwon') || lower.includes('completepaid') || lower.includes('purchasesecured');
+}
+
+function filterDealsRecentOnly(deals: HubSpotDeal[], stageLabels: Record<string, string>): HubSpotDeal[] {
+  const openDeals: HubSpotDeal[] = [];
+  const closedWonDeals: HubSpotDeal[] = [];
+
+  for (const deal of deals) {
+    const label = deal.stage ? (stageLabels[deal.stage] || deal.stage) : '';
+    if (isClosedLostStage(label)) continue;
+    if (isClosedWonStage(label)) {
+      closedWonDeals.push(deal);
+    } else {
+      openDeals.push(deal);
+    }
+  }
+
+  closedWonDeals.sort((a, b) => {
+    const dateA = a.closeDate ? new Date(a.closeDate).getTime() : 0;
+    const dateB = b.closeDate ? new Date(b.closeDate).getTime() : 0;
+    return dateB - dateA;
+  });
+
+  const mostRecentClosedWon = closedWonDeals.length > 0 ? [closedWonDeals[0]] : [];
+  return [...openDeals, ...mostRecentClosedWon];
+}
+
 export async function fetchImportPreview(
   school: string,
   existingEmails: Set<string>,
   stageLabels: Record<string, string>,
+  recentOnly: boolean = false,
 ): Promise<HubSpotImportPreviewContact[]> {
   const client = await getUncachableHubSpotClient();
   const results: HubSpotImportPreviewContact[] = [];
@@ -310,10 +341,15 @@ export async function fetchImportPreview(
           if (!fullName) continue;
 
           const contactDeals = await getDealsForContact(client, contact.id);
-          const filteredDeals = contactDeals.filter(d => {
-            const label = d.stage ? (stageLabels[d.stage] || d.stage) : '';
-            return !isClosedLostStage(label);
-          });
+          let filteredDeals: HubSpotDeal[];
+          if (recentOnly) {
+            filteredDeals = filterDealsRecentOnly(contactDeals, stageLabels);
+          } else {
+            filteredDeals = contactDeals.filter(d => {
+              const label = d.stage ? (stageLabels[d.stage] || d.stage) : '';
+              return !isClosedLostStage(label);
+            });
+          }
 
           if (filteredDeals.length === 0) continue;
 
@@ -343,6 +379,7 @@ export async function searchHubSpotContacts(
   searchQuery: string,
   existingEmails: Set<string>,
   stageLabels: Record<string, string>,
+  recentOnly: boolean = false,
 ): Promise<HubSpotImportPreviewContact[]> {
   const client = await getUncachableHubSpotClient();
   const results: HubSpotImportPreviewContact[] = [];
@@ -370,10 +407,15 @@ export async function searchHubSpotContacts(
           }
 
           const contactDeals = await getDealsForContact(client, contact.id);
-          const filteredDeals = contactDeals.filter(d => {
-            const label = d.stage ? (stageLabels[d.stage] || d.stage) : '';
-            return !isClosedLostStage(label);
-          });
+          let filteredDeals: HubSpotDeal[];
+          if (recentOnly) {
+            filteredDeals = filterDealsRecentOnly(contactDeals, stageLabels);
+          } else {
+            filteredDeals = contactDeals.filter(d => {
+              const label = d.stage ? (stageLabels[d.stage] || d.stage) : '';
+              return !isClosedLostStage(label);
+            });
+          }
 
           const alreadyImported = existingEmails.has(contact.email.toLowerCase());
 
@@ -396,16 +438,63 @@ export async function searchHubSpotContacts(
   return results;
 }
 
+function extractCourseFromDealName(dealName: string, contactName: string): { courseName: string; term: string } | null {
+  let cleaned = dealName;
+  const companyPrefixes = ['Indiana University', 'Purdue University', 'IU', 'Purdue'];
+  for (const prefix of companyPrefixes) {
+    if (cleaned.startsWith(prefix + ' - ')) {
+      cleaned = cleaned.slice(prefix.length + 3).trim();
+    } else if (cleaned.startsWith(prefix + ' ')) {
+      cleaned = cleaned.slice(prefix.length + 1).trim();
+    }
+  }
+
+  if (contactName) {
+    const nameVariants = [contactName];
+    const parts = contactName.split(' ');
+    if (parts.length >= 2) {
+      nameVariants.push(parts[parts.length - 1]);
+    }
+    for (const name of nameVariants) {
+      const nameIdx = cleaned.indexOf(name);
+      if (nameIdx !== -1) {
+        cleaned = cleaned.slice(0, nameIdx) + cleaned.slice(nameIdx + name.length);
+        cleaned = cleaned.replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
+      }
+    }
+  }
+
+  cleaned = cleaned.replace(/\s*-?\s*Renewal\s+Deal\s*\d*/gi, '').trim();
+  cleaned = cleaned.replace(/\s*-?\s*Deal\s*\d*/gi, '').trim();
+  cleaned = cleaned.replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
+
+  const termPattern = /\b(Spring|Fall|Summer|Winter)\s+(\d{4})\b/i;
+  const termMatch = cleaned.match(termPattern);
+  let term = 'Current';
+  if (termMatch) {
+    term = `${termMatch[1]} ${termMatch[2]}`;
+    cleaned = cleaned.replace(termPattern, '').trim();
+    cleaned = cleaned.replace(/^\s*-\s*/, '').replace(/\s*-\s*$/, '').trim();
+  }
+
+  if (!cleaned || cleaned.length < 3) return null;
+
+  return { courseName: cleaned, term };
+}
+
 export async function importSelectedContacts(
   contacts: HubSpotImportPreviewContact[],
   storage: {
     getInstructorByEmail: (email: string) => Promise<any>;
     createInstructor: (data: any) => Promise<any>;
     upsertDeal: (data: any) => Promise<any>;
+    createCourse?: (data: any) => Promise<any>;
+    getCoursesByInstructor?: (instructorId: number) => Promise<any[]>;
   }
-): Promise<{ instructorsCreated: number; dealsImported: number; skipped: number }> {
+): Promise<{ instructorsCreated: number; dealsImported: number; coursesCreated: number; skipped: number }> {
   let instructorsCreated = 0;
   let dealsImported = 0;
+  let coursesCreated = 0;
   let skipped = 0;
 
   for (const contact of contacts) {
@@ -428,6 +517,11 @@ export async function importSelectedContacts(
       instructorsCreated++;
     }
 
+    const existingCourses = storage.getCoursesByInstructor
+      ? await storage.getCoursesByInstructor(instructorId)
+      : [];
+    const existingCourseNames = new Set(existingCourses.map((c: any) => c.name?.toLowerCase()));
+
     for (const deal of contact.deals) {
       await storage.upsertDeal({
         hubspotDealId: deal.id,
@@ -440,10 +534,30 @@ export async function importSelectedContacts(
         hubspotContactId: contact.hubspotContactId,
       });
       dealsImported++;
+
+      if (storage.createCourse) {
+        const courseInfo = extractCourseFromDealName(deal.dealName, contact.name);
+        if (courseInfo && !existingCourseNames.has(courseInfo.courseName.toLowerCase())) {
+          try {
+            await storage.createCourse({
+              name: courseInfo.courseName,
+              code: courseInfo.courseName.substring(0, 20),
+              term: courseInfo.term,
+              format: 'in-person',
+              enrollment: 0,
+              instructorId,
+            });
+            existingCourseNames.add(courseInfo.courseName.toLowerCase());
+            coursesCreated++;
+          } catch (e) {
+            console.error(`Failed to create course from deal "${deal.dealName}":`, e);
+          }
+        }
+      }
     }
   }
 
-  return { instructorsCreated, dealsImported, skipped };
+  return { instructorsCreated, dealsImported, coursesCreated, skipped };
 }
 
 export async function getDealStageLabel(client: Client, stageId: string): Promise<string> {
