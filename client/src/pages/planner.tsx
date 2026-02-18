@@ -264,31 +264,37 @@ export default function Planner() {
   }, [meetings]);
 
   const plannerRows = useMemo(() => {
-    const instructorIds = new Set<number>();
     const rows: {
       instructor: Instructor;
       officeHours: OfficeHour[];
+      allOfficeHours: OfficeHour[];
+      courses: Course[];
       lectures: LectureBlock[];
       meetings: PlannedMeeting[];
     }[] = [];
 
-    availabilityRows.forEach(ar => {
-      instructorIds.add(ar.instructor.id);
-      rows.push({
-        instructor: ar.instructor,
-        officeHours: ar.officeHours,
-        lectures: ar.lectures,
-        meetings: meetingsByInstructor.get(ar.instructor.id) || [],
-      });
-    });
+    const availMap = new Map<number, AvailabilityRow>();
+    availabilityRows.forEach(ar => availMap.set(ar.instructor.id, ar));
 
     meetingsByInstructor.forEach((mList, instId) => {
-      if (!instructorIds.has(instId)) {
+      const ar = availMap.get(instId);
+      if (ar) {
+        rows.push({
+          instructor: ar.instructor,
+          officeHours: ar.officeHours,
+          allOfficeHours: ar.allOfficeHours || ar.officeHours,
+          courses: ar.courses || [],
+          lectures: ar.lectures,
+          meetings: mList,
+        });
+      } else {
         const inst = getInstructor(instId);
         if (inst) {
           rows.push({
             instructor: inst,
             officeHours: [],
+            allOfficeHours: [],
+            courses: [],
             lectures: [],
             meetings: mList,
           });
@@ -395,7 +401,7 @@ export default function Planner() {
     <Layout>
       <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
         <div className="space-y-1">
-          <h1 className="text-3xl font-display font-bold" data-testid="text-planner-title">Visit Planner</h1>
+          <h1 className="text-3xl font-display font-bold" data-testid="text-planner-title">Campus Plan</h1>
           <p className="text-muted-foreground">Plan your campus day and schedule instructor meetings.</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

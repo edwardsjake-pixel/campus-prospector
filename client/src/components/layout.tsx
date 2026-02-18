@@ -24,7 +24,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Faculty & Courses', href: '/instructors', icon: Users },
     { name: 'Visits', href: '/visits', icon: MapPin },
-    { name: 'Planner', href: '/planner', icon: Calendar },
+    { name: 'Campus Plan', href: '/planner', icon: Calendar },
     { name: 'Availability', href: '/availability', icon: GanttChart },
   ];
 
