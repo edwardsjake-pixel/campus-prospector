@@ -164,10 +164,10 @@ function TimeBlock({
   if (width <= 0) return null;
 
   const colorMap = {
-    office: "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-700 dark:border-emerald-400",
-    lecture: "bg-blue-600 dark:bg-blue-500 text-white border-blue-700 dark:border-blue-400",
-    available: "bg-amber-400/30 text-amber-900 dark:text-amber-100 border-amber-400/50",
-    meeting: "bg-purple-600 dark:bg-purple-500 text-white border-purple-700 dark:border-purple-400",
+    office: "bg-emerald-500/30 text-emerald-900 dark:text-emerald-100 border-emerald-400/50",
+    lecture: "bg-blue-500/30 text-blue-900 dark:text-blue-100 border-blue-400/50",
+    available: "bg-amber-400/15 text-amber-900 dark:text-amber-100 border-amber-300/40",
+    meeting: "bg-purple-500/25 text-purple-800 dark:text-purple-200 border-purple-400/60",
   };
 
   const laneStyle = lane === "top"
@@ -180,12 +180,12 @@ function TimeBlock({
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`absolute ${laneStyle} rounded-sm border ${colorMap[variant]} flex items-center overflow-hidden cursor-default`}
+          className={`absolute ${laneStyle} rounded-md border ${colorMap[variant]} flex items-center overflow-hidden cursor-default`}
           style={{ left: `${left}%`, width: `${width}%`, minWidth: "2px" }}
           data-testid={`block-${variant}`}
         >
           {width > 4 && (
-            <span className="text-[10px] font-bold truncate px-1.5 leading-tight">
+            <span className="text-[10px] font-semibold truncate px-1.5 leading-tight drop-shadow-sm">
               {label}
             </span>
           )}
@@ -359,15 +359,15 @@ export default function Availability() {
 
               <div className="flex items-center gap-4 text-xs flex-wrap">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm bg-emerald-600 dark:bg-emerald-500" />
+                  <div className="w-3 h-3 rounded-sm bg-emerald-500/20 border border-emerald-400/50" />
                   <span className="text-muted-foreground">Office Hours</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm bg-blue-600 dark:bg-blue-500" />
+                  <div className="w-3 h-3 rounded-sm bg-blue-500/20 border border-blue-400/50" />
                   <span className="text-muted-foreground">Lecture</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm bg-amber-400/30 border border-amber-400/50" />
+                  <div className="w-3 h-3 rounded-sm bg-amber-400/15 border border-amber-300/40" />
                   <span className="text-muted-foreground">Likely Available</span>
                 </div>
               </div>

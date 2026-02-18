@@ -22,10 +22,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Faculty & Courses', href: '/instructors', icon: Users },
-    { name: 'Visits', href: '/visits', icon: MapPin },
     { name: 'Campus Plan', href: '/planner', icon: Calendar },
     { name: 'Availability', href: '/availability', icon: GanttChart },
+    { name: 'Faculty & Courses', href: '/instructors', icon: Users },
+    { name: 'Visits', href: '/visits', icon: MapPin },
   ];
 
   const NavContent = () => (
