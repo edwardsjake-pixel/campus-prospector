@@ -46,12 +46,16 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
             </div>
           )}
 
-          {instructor.officeLocation && (
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <MapPin className="w-3 h-3 shrink-0" />
-              <span className="truncate">{instructor.officeLocation}</span>
-            </div>
-          )}
+          {(() => {
+            const bldg = courses.find(c => c.building)?.building || null;
+            const parts = [bldg, instructor.officeLocation].filter(Boolean);
+            return parts.length > 0 ? (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <MapPin className="w-3 h-3 shrink-0" />
+                <span className="truncate">{parts.join(", ")}</span>
+              </div>
+            ) : null;
+          })()}
 
           {hasNotes && (
             <p className="text-muted-foreground text-[11px] leading-snug">

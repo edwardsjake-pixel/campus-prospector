@@ -678,12 +678,16 @@ export default function Planner() {
                             {row.instructor.department && (
                               <span className="text-[10px] text-muted-foreground truncate block">{row.instructor.department}</span>
                             )}
-                            {row.instructor.officeLocation && (
-                              <div className="flex items-center gap-0.5 mt-0.5">
-                                <MapPin className="w-2.5 h-2.5 text-muted-foreground" />
-                                <span className="text-[10px] text-muted-foreground truncate">{row.instructor.officeLocation}</span>
-                              </div>
-                            )}
+                            {(() => {
+                              const bldg = (row.courses || []).find((c: any) => c.building)?.building || null;
+                              const parts = [bldg, row.instructor.officeLocation].filter(Boolean);
+                              return parts.length > 0 ? (
+                                <div className="flex items-center gap-0.5 mt-0.5">
+                                  <MapPin className="w-2.5 h-2.5 text-muted-foreground" />
+                                  <span className="text-[10px] text-muted-foreground truncate">{parts.join(", ")}</span>
+                                </div>
+                              ) : null;
+                            })()}
                             <InstructorDetailToggle
                               instructor={row.instructor}
                               courses={row.courses || []}

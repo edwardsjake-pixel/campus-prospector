@@ -642,6 +642,9 @@ export default function Instructors() {
                   const isExpanded = expandedIds.has(instructor.id);
                   const courses = instructor.courses || [];
                   const officeHours = instructor.officeHours || [];
+                  const primaryBuilding = courses.find(c => c.building)?.building || null;
+                  const locationParts = [primaryBuilding, instructor.officeLocation].filter(Boolean);
+                  const fullLocation = locationParts.length > 0 ? locationParts.join(", ") : null;
 
                   return (
                     <Fragment key={instructor.id}>
@@ -686,10 +689,10 @@ export default function Instructors() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {instructor.officeLocation && (
+                          {fullLocation && (
                             <div className="flex items-center text-sm text-slate-600">
                               <MapPin className="w-3 h-3 mr-2 text-slate-400" />
-                              {instructor.officeLocation}
+                              {fullLocation}
                             </div>
                           )}
                         </TableCell>
