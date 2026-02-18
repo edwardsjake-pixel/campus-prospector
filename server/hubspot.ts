@@ -60,9 +60,9 @@ interface HubSpotDeal {
 }
 
 const SCHOOL_COMPANY_MAP: Record<string, string[]> = {
-  purdue: ["Purdue"],
-  iu: ["Indiana University Bloomington"],
-  both: ["Purdue", "Indiana University Bloomington"],
+  purdue: ["Purdue University"],
+  iu: ["Indiana University Bloomington", "Indiana University"],
+  both: ["Purdue University", "Indiana University Bloomington", "Indiana University"],
 };
 
 export interface HubSpotSyncResult {
@@ -165,15 +165,17 @@ async function searchCompaniesByName(client: Client, name: string): Promise<{ id
         }]
       }],
       properties: ['name'],
-      limit: 10,
+      limit: 50,
       after: 0 as any,
       sorts: [],
     });
 
-    return response.results.map(r => ({
-      id: r.id,
-      name: r.properties.name || name,
-    }));
+    return response.results
+      .filter(r => r.properties.name?.toLowerCase() === name.toLowerCase())
+      .map(r => ({
+        id: r.id,
+        name: r.properties.name || name,
+      }));
   } catch (e) {
     console.error(`Failed to search companies for "${name}":`, e);
     return [];
@@ -198,6 +200,7 @@ export async function syncHubSpotData(
     errors: [],
   };
 
+  const seenContactIds = new Set<string>();
   for (const companyName of companyNames) {
     try {
       const companies = await searchCompaniesByName(client, companyName);
@@ -213,6 +216,8 @@ export async function syncHubSpotData(
 
         for (const contact of contacts) {
           if (!contact.email) continue;
+          if (seenContactIds.has(contact.id)) continue;
+          seenContactIds.add(contact.id);
 
           const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
           if (!fullName) continue;
@@ -283,6 +288,7 @@ export async function fetchImportPreview(
 ): Promise<HubSpotImportPreviewContact[]> {
   const client = await getUncachableHubSpotClient();
   const results: HubSpotImportPreviewContact[] = [];
+  const seenContactIds = new Set<string>();
   const companyNames = SCHOOL_COMPANY_MAP[school] || SCHOOL_COMPANY_MAP['both'];
 
   for (const companyName of companyNames) {
@@ -294,6 +300,8 @@ export async function fetchImportPreview(
 
         for (const contact of contacts) {
           if (!contact.email) continue;
+          if (seenContactIds.has(contact.id)) continue;
+          seenContactIds.add(contact.id);
 
           const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
           if (!fullName) continue;
@@ -335,6 +343,7 @@ export async function searchHubSpotContacts(
 ): Promise<HubSpotImportPreviewContact[]> {
   const client = await getUncachableHubSpotClient();
   const results: HubSpotImportPreviewContact[] = [];
+  const seenContactIds = new Set<string>();
   const companyNames = SCHOOL_COMPANY_MAP[school] || SCHOOL_COMPANY_MAP['both'];
 
   for (const companyName of companyNames) {
@@ -346,6 +355,8 @@ export async function searchHubSpotContacts(
 
         for (const contact of contacts) {
           if (!contact.email) continue;
+          if (seenContactIds.has(contact.id)) continue;
+          seenContactIds.add(contact.id);
 
           const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
           if (!fullName) continue;

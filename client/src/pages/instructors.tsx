@@ -732,7 +732,7 @@ export default function Instructors() {
   const hubspotSync = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/hubspot/sync", {
-        companyNames: ["Purdue", "Indiana University Bloomington"],
+        companyNames: ["Purdue University", "Indiana University Bloomington", "Indiana University"],
       });
       return res.json();
     },
