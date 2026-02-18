@@ -41,7 +41,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   Plus, Search, MapPin, Mail, Building2, Pencil, Trash2, Filter, 
-  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2, Download, Check
+  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2, Download, Check, X
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CsvImport } from "@/components/csv-import";
@@ -421,42 +421,29 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [hasLoaded, setHasLoaded] = useState(false);
   const [searchInput, setSearchInput] = useState("");
-  const [mode, setMode] = useState<"deals" | "search">("deals");
 
-  const previewMutation = useMutation({
-    mutationFn: async (selectedSchool: string) => {
-      const res = await apiRequest("POST", "/api/hubspot/import-preview", {
-        school: selectedSchool,
-      });
-      return res.json() as Promise<HubSpotPreviewContact[]>;
+  const fetchContacts = useMutation({
+    mutationFn: async ({ selectedSchool, query }: { selectedSchool: string; query: string }) => {
+      if (query.trim()) {
+        const res = await apiRequest("POST", "/api/hubspot/search-contacts", {
+          school: selectedSchool,
+          query: query.trim(),
+        });
+        return res.json() as Promise<HubSpotPreviewContact[]>;
+      } else {
+        const res = await apiRequest("POST", "/api/hubspot/import-preview", {
+          school: selectedSchool,
+        });
+        return res.json() as Promise<HubSpotPreviewContact[]>;
+      }
     },
     onSuccess: (data) => {
       setContacts(data);
       setSelected(new Set(data.filter(c => !c.alreadyImported).map(c => c.hubspotContactId)));
       setHasLoaded(true);
-      setMode("deals");
     },
     onError: (err: any) => {
       toast({ title: "Failed to load contacts", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const searchMutation = useMutation({
-    mutationFn: async ({ selectedSchool, query }: { selectedSchool: string; query: string }) => {
-      const res = await apiRequest("POST", "/api/hubspot/search-contacts", {
-        school: selectedSchool,
-        query,
-      });
-      return res.json() as Promise<HubSpotPreviewContact[]>;
-    },
-    onSuccess: (data) => {
-      setContacts(data);
-      setSelected(new Set(data.filter(c => !c.alreadyImported).map(c => c.hubspotContactId)));
-      setHasLoaded(true);
-      setMode("search");
-    },
-    onError: (err: any) => {
-      toast({ title: "Search failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -486,8 +473,7 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       setSelected(new Set());
       setHasLoaded(false);
       setSearchInput("");
-      setMode("deals");
-      previewMutation.mutate(school);
+      fetchContacts.mutate({ selectedSchool: school, query: "" });
     }
   }, [open]);
 
@@ -496,20 +482,22 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     setContacts([]);
     setSelected(new Set());
     setHasLoaded(false);
-    setSearchInput("");
-    setMode("deals");
-    previewMutation.mutate(value);
-  }, []);
+    fetchContacts.mutate({ selectedSchool: value, query: searchInput });
+  }, [searchInput]);
 
   const handleSearch = useCallback(() => {
-    if (!searchInput.trim()) return;
-    searchMutation.mutate({ selectedSchool: school, query: searchInput.trim() });
+    setContacts([]);
+    setSelected(new Set());
+    setHasLoaded(false);
+    fetchContacts.mutate({ selectedSchool: school, query: searchInput });
   }, [school, searchInput]);
 
-  const handleBackToDeals = useCallback(() => {
+  const handleClearSearch = useCallback(() => {
     setSearchInput("");
-    setMode("deals");
-    previewMutation.mutate(school);
+    setContacts([]);
+    setSelected(new Set());
+    setHasLoaded(false);
+    fetchContacts.mutate({ selectedSchool: school, query: "" });
   }, [school]);
 
   const selectableContacts = useMemo(() => contacts.filter(c => !c.alreadyImported), [contacts]);
@@ -530,12 +518,14 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     });
   }, []);
 
-  const isLoading = previewMutation.isPending || searchMutation.isPending;
+  const isLoading = fetchContacts.isPending;
 
   const getStageName = (stageId: string | null) => {
     if (!stageId) return null;
     return dealStageLabels?.[stageId] || stageId;
   };
+
+  const isSearching = searchInput.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -543,29 +533,14 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         <DialogHeader>
           <DialogTitle data-testid="text-import-dialog-title">Import from HubSpot</DialogTitle>
           <DialogDescription>
-            {mode === "deals"
-              ? "Contacts with open or closed-won deals. Closed-lost deals are excluded."
-              : `Search results for "${searchInput}"`}
+            Search by name or email, or filter by school to see contacts with deals.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Label className="text-sm whitespace-nowrap">School:</Label>
-            <Select value={school} onValueChange={handleSchoolChange} data-testid="select-school">
-              <SelectTrigger className="w-[200px]" data-testid="select-school-trigger">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="both" data-testid="select-school-both">Both Schools</SelectItem>
-                <SelectItem value="purdue" data-testid="select-school-purdue">Purdue University</SelectItem>
-                <SelectItem value="iu" data-testid="select-school-iu">IU Bloomington</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="flex items-center gap-1 flex-1 min-w-[200px]">
             <Input
-              placeholder="Search contacts by name or email..."
+              placeholder="Search by name or email..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -575,24 +550,33 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               size="icon"
               variant="outline"
               onClick={handleSearch}
-              disabled={!searchInput.trim() || isLoading}
+              disabled={isLoading}
               data-testid="button-hubspot-search"
             >
               <Search className="w-4 h-4" />
             </Button>
+            {isSearching && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleClearSearch}
+                disabled={isLoading}
+                data-testid="button-clear-search"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
           </div>
-          {mode === "search" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleBackToDeals}
-              disabled={isLoading}
-              data-testid="button-back-to-deals"
-            >
-              <DollarSign className="w-3 h-3 mr-1" />
-              Show deals
-            </Button>
-          )}
+          <Select value={school} onValueChange={handleSchoolChange} data-testid="select-school">
+            <SelectTrigger className="w-[200px]" data-testid="select-school-trigger">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="both" data-testid="select-school-both">Both Schools</SelectItem>
+              <SelectItem value="purdue" data-testid="select-school-purdue">Purdue University</SelectItem>
+              <SelectItem value="iu" data-testid="select-school-iu">IU Bloomington</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex-1 overflow-auto min-h-0 border rounded-md">
@@ -600,17 +584,21 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <div className="flex items-center justify-center py-12" data-testid="loading-hubspot-preview">
               <Loader2 className="w-6 h-6 animate-spin mr-2" />
               <span className="text-sm text-muted-foreground">
-                {mode === "search" ? "Searching HubSpot..." : "Loading contacts from HubSpot..."}
+                {isSearching ? "Searching HubSpot..." : "Loading contacts with deals..."}
               </span>
             </div>
           ) : contacts.length === 0 && hasLoaded ? (
             <div className="text-center py-12 text-muted-foreground" data-testid="text-no-contacts">
               <p className="text-sm">
-                {mode === "search"
-                  ? `No contacts found matching "${searchInput}".`
+                {isSearching
+                  ? `No contacts found matching "${searchInput.trim()}".`
                   : "No contacts with open or won deals found at this school."}
               </p>
-              <p className="text-xs mt-1">Try searching for a specific contact by name above.</p>
+              <p className="text-xs mt-1">
+                {isSearching
+                  ? "Try a different name or email address."
+                  : "Try searching for a specific contact by name or email."}
+              </p>
             </div>
           ) : (
             <Table>
@@ -680,7 +668,7 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                           ))}
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">No active deals</span>
+                        <span className="text-xs text-muted-foreground">No deals</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right text-sm font-medium" data-testid={`text-contact-value-${contact.hubspotContactId}`}>
