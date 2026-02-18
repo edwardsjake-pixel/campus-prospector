@@ -248,6 +248,99 @@ export async function syncHubSpotData(
   return result;
 }
 
+export interface HubSpotImportPreviewContact {
+  hubspotContactId: string;
+  name: string;
+  email: string;
+  company: string;
+  deals: { id: string; dealName: string; stage: string | null; amount: string | null }[];
+  totalDealValue: number;
+}
+
+export async function fetchImportPreview(
+  companyNames: string[],
+  existingEmails: Set<string>,
+): Promise<HubSpotImportPreviewContact[]> {
+  const client = await getUncachableHubSpotClient();
+  const results: HubSpotImportPreviewContact[] = [];
+
+  for (const companyName of companyNames) {
+    try {
+      const companies = await searchCompaniesByName(client, companyName);
+      for (const company of companies) {
+        const realCompanyName = await getCompanyName(client, company.id) || company.name;
+        const contacts = await getContactsForCompany(client, company.id);
+
+        for (const contact of contacts) {
+          if (!contact.email) continue;
+          if (existingEmails.has(contact.email.toLowerCase())) continue;
+
+          const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
+          if (!fullName) continue;
+
+          const contactDeals = await getDealsForContact(client, contact.id);
+          if (contactDeals.length === 0) continue;
+
+          results.push({
+            hubspotContactId: contact.id,
+            name: fullName,
+            email: contact.email,
+            company: realCompanyName,
+            deals: contactDeals,
+            totalDealValue: contactDeals.reduce((sum, d) => sum + (Number(d.amount) || 0), 0),
+          });
+        }
+      }
+    } catch (e: any) {
+      console.error(`Preview error for "${companyName}":`, e.message);
+    }
+  }
+
+  return results;
+}
+
+export async function importSelectedContacts(
+  contacts: HubSpotImportPreviewContact[],
+  storage: {
+    getInstructorByEmail: (email: string) => Promise<any>;
+    createInstructor: (data: any) => Promise<any>;
+    upsertDeal: (data: any) => Promise<any>;
+  }
+): Promise<{ instructorsCreated: number; dealsImported: number; skipped: number }> {
+  let instructorsCreated = 0;
+  let dealsImported = 0;
+  let skipped = 0;
+
+  for (const contact of contacts) {
+    const existing = await storage.getInstructorByEmail(contact.email);
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    const newInstructor = await storage.createInstructor({
+      name: contact.name,
+      email: contact.email,
+      institution: contact.company,
+    });
+    instructorsCreated++;
+
+    for (const deal of contact.deals) {
+      await storage.upsertDeal({
+        hubspotDealId: deal.id,
+        dealName: deal.dealName,
+        stage: deal.stage,
+        amount: deal.amount,
+        instructorId: newInstructor.id,
+        hubspotContactId: contact.hubspotContactId,
+      });
+      dealsImported++;
+    }
+  }
+
+  return { instructorsCreated, dealsImported, skipped };
+}
+
 export async function getDealStageLabel(client: Client, stageId: string): Promise<string> {
   try {
     const pipelines = await client.crm.pipelines.pipelinesApi.getAll('deals');

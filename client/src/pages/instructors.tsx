@@ -41,10 +41,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   Plus, Search, MapPin, Mail, Building2, Pencil, Trash2, Filter, 
-  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2
+  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2, Download, Check
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CsvImport } from "@/components/csv-import";
-import { useState, useMemo, useEffect, Fragment } from "react";
+import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
 import { useForm } from "react-hook-form";
 import { InsertInstructor, InsertCourse } from "@shared/schema";
 import type { Deal } from "@shared/schema";
@@ -402,6 +403,191 @@ const priorityColor = (priority: string | null) => {
   }
 };
 
+interface HubSpotPreviewContact {
+  hubspotContactId: string;
+  name: string;
+  email: string;
+  company: string;
+  deals: { id: string; dealName: string; stage: string | null; amount: string | null }[];
+  totalDealValue: number;
+}
+
+function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { toast } = useToast();
+  const [preview, setPreview] = useState<HubSpotPreviewContact[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  const previewMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/hubspot/import-preview", {
+        companyNames: ["Indiana"],
+      });
+      return res.json() as Promise<HubSpotPreviewContact[]>;
+    },
+    onSuccess: (data) => {
+      setPreview(data);
+      setSelected(new Set(data.map(c => c.hubspotContactId)));
+      setHasLoaded(true);
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to load preview", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      const contactsToImport = preview.filter(c => selected.has(c.hubspotContactId));
+      const res = await apiRequest("POST", "/api/hubspot/import", { contacts: contactsToImport });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      toast({
+        title: "Import complete",
+        description: `${data.instructorsCreated} contacts imported, ${data.dealsImported} deals added${data.skipped ? `, ${data.skipped} skipped` : ""}`,
+      });
+      onOpenChange(false);
+      setPreview([]);
+      setSelected(new Set());
+      setHasLoaded(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  useEffect(() => {
+    if (open && !hasLoaded && !previewMutation.isPending) {
+      previewMutation.mutate();
+    }
+    if (!open) {
+      setHasLoaded(false);
+      setPreview([]);
+      setSelected(new Set());
+    }
+  }, [open]);
+
+  const toggleAll = useCallback(() => {
+    if (selected.size === preview.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(preview.map(c => c.hubspotContactId)));
+    }
+  }, [selected, preview]);
+
+  const toggleOne = useCallback((id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[700px] max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Import from HubSpot</DialogTitle>
+          <DialogDescription>
+            Contacts with active deals in Indiana. Only new contacts (not already in CampusAlly) are shown.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto min-h-0">
+          {previewMutation.isPending ? (
+            <div className="flex items-center justify-center py-12" data-testid="loading-hubspot-preview">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" />
+              <span className="text-sm text-muted-foreground">Loading contacts from HubSpot...</span>
+            </div>
+          ) : preview.length === 0 && hasLoaded ? (
+            <div className="text-center py-12 text-muted-foreground" data-testid="text-no-contacts">
+              <p className="text-sm">No new contacts with deals found.</p>
+              <p className="text-xs mt-1">All HubSpot contacts with Indiana deals are already in CampusAlly.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={selected.size === preview.length && preview.length > 0}
+                      onCheckedChange={toggleAll}
+                      data-testid="checkbox-select-all"
+                    />
+                  </TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Deals</TableHead>
+                  <TableHead className="text-right">Value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {preview.map((contact) => (
+                  <TableRow key={contact.hubspotContactId} data-testid={`row-import-contact-${contact.hubspotContactId}`}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selected.has(contact.hubspotContactId)}
+                        onCheckedChange={() => toggleOne(contact.hubspotContactId)}
+                        data-testid={`checkbox-contact-${contact.hubspotContactId}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium text-sm" data-testid={`text-contact-name-${contact.hubspotContactId}`}>{contact.name}</p>
+                        <p className="text-xs text-muted-foreground">{contact.email}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm" data-testid={`text-contact-company-${contact.hubspotContactId}`}>{contact.company}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {contact.deals.map(d => (
+                          <Badge
+                            key={d.id}
+                            variant="outline"
+                            className="text-[10px] bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 no-default-hover-elevate no-default-active-elevate"
+                            data-testid={`badge-preview-deal-${d.id}`}
+                          >
+                            {d.dealName}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-medium" data-testid={`text-contact-value-${contact.hubspotContactId}`}>
+                      {contact.totalDealValue > 0 ? `$${contact.totalDealValue.toLocaleString()}` : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+        {preview.length > 0 && (
+          <div className="flex items-center justify-between gap-2 pt-2 border-t">
+            <p className="text-sm text-muted-foreground" data-testid="text-selected-count">
+              {selected.size} of {preview.length} selected
+            </p>
+            <Button
+              onClick={() => importMutation.mutate()}
+              disabled={selected.size === 0 || importMutation.isPending}
+              data-testid="button-import-selected"
+            >
+              {importMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4 mr-2" />
+              )}
+              {importMutation.isPending ? "Importing..." : `Import ${selected.size} Contact${selected.size !== 1 ? "s" : ""}`}
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Instructors() {
   const { data: instructors, isLoading } = useInstructors();
   const { data: allCourses } = useCourses();
@@ -416,6 +602,7 @@ export default function Instructors() {
   const [editingInstructor, setEditingInstructor] = useState<any | null>(null);
   const [editingCourse, setEditingCourse] = useState<any | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [deletingCourseId, setDeletingCourseId] = useState<number | null>(null);
   const { toast } = useToast();
 
@@ -619,6 +806,14 @@ export default function Instructors() {
               <RefreshCw className="w-4 h-4 mr-2" />
             )}
             {hubspotSync.isPending ? "Syncing..." : "Sync HubSpot"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setIsImportOpen(true)}
+            data-testid="button-hubspot-import"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Import from HubSpot
           </Button>
           <CsvImport type="instructors" />
           <CsvImport type="courses" />
@@ -1080,6 +1275,7 @@ export default function Instructors() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <HubSpotImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
     </Layout>
   );
 }

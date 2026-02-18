@@ -6,7 +6,7 @@ import { registerAuthRoutes } from "./replit_integrations/auth";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { insertInstructorSchema, insertCourseSchema, insertOfficeHourSchema, insertVisitSchema, insertVisitInteractionSchema, insertPlannedMeetingSchema } from "@shared/schema";
-import { syncHubSpotData, fetchDealStageLabels } from "./hubspot";
+import { syncHubSpotData, fetchDealStageLabels, fetchImportPreview, importSelectedContacts, type HubSpotImportPreviewContact } from "./hubspot";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -473,6 +473,46 @@ export async function registerRoutes(
       res.json(labels);
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Failed to fetch deal stages" });
+    }
+  });
+
+  app.post("/api/hubspot/import-preview", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const companyNames = req.body.companyNames as string[];
+      if (!Array.isArray(companyNames) || companyNames.length === 0) {
+        return res.status(400).json({ message: "companyNames array is required" });
+      }
+      const allInstructors = await storage.getInstructors();
+      const existingEmails = new Set(
+        allInstructors
+          .map(i => i.email?.toLowerCase())
+          .filter((e): e is string => !!e)
+      );
+      const preview = await fetchImportPreview(companyNames, existingEmails);
+      res.json(preview);
+    } catch (error: any) {
+      console.error("HubSpot import preview error:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch import preview" });
+    }
+  });
+
+  app.post("/api/hubspot/import", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const contacts = req.body.contacts as HubSpotImportPreviewContact[];
+      if (!Array.isArray(contacts) || contacts.length === 0) {
+        return res.status(400).json({ message: "contacts array is required" });
+      }
+      const result = await importSelectedContacts(contacts, {
+        getInstructorByEmail: (email) => storage.getInstructorByEmail(email),
+        createInstructor: (data) => storage.createInstructor(data),
+        upsertDeal: (data) => storage.upsertDeal(data),
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error("HubSpot import error:", error);
+      res.status(500).json({ message: error.message || "Failed to import contacts" });
     }
   });
 
