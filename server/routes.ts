@@ -6,6 +6,7 @@ import { registerAuthRoutes } from "./replit_integrations/auth";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { insertInstructorSchema, insertCourseSchema, insertOfficeHourSchema, insertVisitSchema, insertVisitInteractionSchema, insertPlannedMeetingSchema } from "@shared/schema";
+import { syncHubSpotData, fetchDealStageLabels } from "./hubspot";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -430,6 +431,48 @@ export async function registerRoutes(
       res.json({ imported: created.length });
     } catch (error) {
       res.status(400).json({ message: "Failed to import courses" });
+    }
+  });
+
+  // === Deals ===
+  app.get("/api/deals", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const instructorId = req.query.instructorId ? Number(req.query.instructorId) : undefined;
+    if (instructorId) {
+      const deals = await storage.getDealsByInstructor(instructorId);
+      return res.json(deals);
+    }
+    const deals = await storage.getAllDeals();
+    res.json(deals);
+  });
+
+  // === HubSpot Sync ===
+  app.post("/api/hubspot/sync", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const companyNames = req.body.companyNames as string[];
+      if (!Array.isArray(companyNames) || companyNames.length === 0) {
+        return res.status(400).json({ message: "companyNames array is required" });
+      }
+      const result = await syncHubSpotData(companyNames, {
+        getInstructorByEmail: (email) => storage.getInstructorByEmail(email),
+        createInstructor: (data) => storage.createInstructor(data),
+        updateInstructor: (id, data) => storage.updateInstructor(id, data),
+        upsertDeal: (data) => storage.upsertDeal(data),
+      });
+      res.json(result);
+    } catch (error: any) {
+      console.error("HubSpot sync error:", error);
+      res.status(500).json({ message: error.message || "HubSpot sync failed" });
+    }
+  });
+
+  app.get("/api/hubspot/deal-stages", async (_req, res) => {
+    try {
+      const labels = await fetchDealStageLabels();
+      res.json(labels);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to fetch deal stages" });
     }
   });
 

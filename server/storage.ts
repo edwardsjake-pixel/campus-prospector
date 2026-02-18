@@ -5,6 +5,7 @@ import {
   visits,
   visitInteractions,
   plannedMeetings,
+  deals,
   type Instructor,
   type InsertInstructor,
   type InstructorWithDetails,
@@ -18,6 +19,8 @@ import {
   type InsertVisitInteraction,
   type PlannedMeeting,
   type InsertPlannedMeeting,
+  type Deal,
+  type InsertDeal,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, like, or, and } from "drizzle-orm";
@@ -55,7 +58,13 @@ export interface IStorage {
   updatePlannedMeeting(id: number, updates: Partial<InsertPlannedMeeting>): Promise<PlannedMeeting>;
   deletePlannedMeeting(id: number): Promise<void>;
 
-  // Bulk operations
+  // Deals
+  getDealsByInstructor(instructorId: number): Promise<Deal[]>;
+  getAllDeals(): Promise<Deal[]>;
+  upsertDeal(deal: InsertDeal): Promise<Deal>;
+
+  // Lookup
+  getInstructorByEmail(email: string): Promise<Instructor | undefined>;
   getInstructorByName(name: string): Promise<Instructor | undefined>;
   bulkCreateInstructors(items: InsertInstructor[]): Promise<{ created: Instructor[]; existing: Instructor[]; updated: Instructor[]; skippedCount: number }>;
   bulkCreateCourses(items: InsertCourse[]): Promise<Course[]>;
@@ -219,9 +228,39 @@ export class DatabaseStorage implements IStorage {
     await db.delete(plannedMeetings).where(eq(plannedMeetings.id, id));
   }
 
+  async getInstructorByEmail(email: string): Promise<Instructor | undefined> {
+    const [instructor] = await db.select().from(instructors).where(eq(instructors.email, email));
+    return instructor;
+  }
+
   async getInstructorByName(name: string): Promise<Instructor | undefined> {
     const [instructor] = await db.select().from(instructors).where(eq(instructors.name, name));
     return instructor;
+  }
+
+  async getDealsByInstructor(instructorId: number): Promise<Deal[]> {
+    return await db.select().from(deals).where(eq(deals.instructorId, instructorId));
+  }
+
+  async getAllDeals(): Promise<Deal[]> {
+    return await db.select().from(deals);
+  }
+
+  async upsertDeal(deal: InsertDeal): Promise<Deal> {
+    const [existing] = await db.select().from(deals).where(eq(deals.hubspotDealId, deal.hubspotDealId));
+    if (existing) {
+      const [updated] = await db.update(deals).set({
+        dealName: deal.dealName,
+        stage: deal.stage,
+        amount: deal.amount,
+        instructorId: deal.instructorId,
+        hubspotContactId: deal.hubspotContactId,
+        lastSyncedAt: new Date(),
+      }).where(eq(deals.id, existing.id)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(deals).values(deal).returning();
+    return created;
   }
 
   async bulkCreateInstructors(items: InsertInstructor[]): Promise<{ created: Instructor[]; existing: Instructor[]; updated: Instructor[]; skippedCount: number }> {

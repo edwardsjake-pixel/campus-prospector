@@ -41,18 +41,21 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   Plus, Search, MapPin, Mail, Building2, Pencil, Trash2, Filter, 
-  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users 
+  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2
 } from "lucide-react";
 import { CsvImport } from "@/components/csv-import";
 import { useState, useMemo, useEffect, Fragment } from "react";
 import { useForm } from "react-hook-form";
 import { InsertInstructor, InsertCourse } from "@shared/schema";
+import type { Deal } from "@shared/schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertInstructorSchema, insertCourseSchema } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 function InstructorForm({ 
   defaultValues, 
@@ -402,6 +405,8 @@ const priorityColor = (priority: string | null) => {
 export default function Instructors() {
   const { data: instructors, isLoading } = useInstructors();
   const { data: allCourses } = useCourses();
+  const { data: allDeals } = useQuery<Deal[]>({ queryKey: ["/api/deals"] });
+  const { data: dealStageLabels } = useQuery<Record<string, string>>({ queryKey: ["/api/hubspot/deal-stages"] });
   const [search, setSearch] = useState("");
   const [institutionFilter, setInstitutionFilter] = useState<string>("all");
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -420,6 +425,45 @@ export default function Instructors() {
   const createCourse = useCreateCourse();
   const updateCourse = useUpdateCourse();
   const deleteCourse = useDeleteCourse();
+
+  const hubspotSync = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/hubspot/sync", {
+        companyNames: ["Purdue", "Indiana University Bloomington"],
+      });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hubspot/deal-stages"] });
+      toast({
+        title: "HubSpot sync complete",
+        description: `${data.contactsFound} contacts found, ${data.instructorsCreated} created, ${data.instructorsUpdated} updated, ${data.dealsImported} deals imported${data.errors?.length ? ` (${data.errors.length} errors)` : ''}`,
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "HubSpot sync failed",
+        description: err.message || "Could not sync with HubSpot",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const dealsByInstructor = useMemo(() => {
+    const map = new Map<number, Deal[]>();
+    if (allDeals) {
+      for (const deal of allDeals) {
+        if (deal.instructorId) {
+          const list = map.get(deal.instructorId) || [];
+          list.push(deal);
+          map.set(deal.instructorId, list);
+        }
+      }
+    }
+    return map;
+  }, [allDeals]);
 
   const institutions = useMemo(() => {
     const insts = new Set<string>();
@@ -563,6 +607,19 @@ export default function Instructors() {
           <p className="text-slate-500">Manage your instructor contacts and their course sections.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => hubspotSync.mutate()}
+            disabled={hubspotSync.isPending}
+            data-testid="button-hubspot-sync"
+          >
+            {hubspotSync.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
+            {hubspotSync.isPending ? "Syncing..." : "Sync HubSpot"}
+          </Button>
           <CsvImport type="instructors" />
           <CsvImport type="courses" />
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -624,6 +681,7 @@ export default function Instructors() {
                 <TableHead>Contact</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Courses</TableHead>
+                <TableHead>Deals</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -631,17 +689,18 @@ export default function Instructors() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading faculty...</TableCell>
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Loading faculty...</TableCell>
                 </TableRow>
               ) : filteredInstructors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground" data-testid="text-no-instructors">No instructors found.</TableCell>
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground" data-testid="text-no-instructors">No instructors found.</TableCell>
                 </TableRow>
               ) : (
                 filteredInstructors.map((instructor) => {
                   const isExpanded = expandedIds.has(instructor.id);
                   const courses = instructor.courses || [];
                   const officeHours = instructor.officeHours || [];
+                  const instructorDeals = dealsByInstructor.get(instructor.id) || [];
                   const primaryBuilding = courses.find(c => c.building)?.building || null;
                   const locationParts = [primaryBuilding, instructor.officeLocation].filter(Boolean);
                   const fullLocation = locationParts.length > 0 ? locationParts.join(", ") : null;
@@ -703,6 +762,16 @@ export default function Instructors() {
                           </Badge>
                         </TableCell>
                         <TableCell>
+                          {instructorDeals.length > 0 ? (
+                            <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800">
+                              <DollarSign className="w-3 h-3 mr-1" />
+                              {instructorDeals.length}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">--</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           <Badge className={priorityColor(instructor.targetPriority)} variant="outline">
                             {(instructor.targetPriority || 'medium').toUpperCase()}
                           </Badge>
@@ -731,7 +800,7 @@ export default function Instructors() {
 
                       {isExpanded && (
                         <TableRow key={`expanded-${instructor.id}`} className="bg-slate-50/70" data-testid={`expanded-row-${instructor.id}`}>
-                          <TableCell colSpan={8} className="p-0">
+                          <TableCell colSpan={9} className="p-0">
                             <div className="px-6 py-4 space-y-4">
                               {(instructor.bio || instructor.notes) && (
                                 <div className="text-sm text-slate-600">
@@ -750,6 +819,37 @@ export default function Instructors() {
                                       <Badge key={oh.id} variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800">
                                         {oh.dayOfWeek} {oh.startTime?.slice(0,5)}-{oh.endTime?.slice(0,5)}
                                         {oh.location ? ` @ ${oh.location}` : ""}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {instructorDeals.length > 0 && (
+                                <div>
+                                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+                                    <DollarSign className="w-3 h-3" /> HubSpot Deals ({instructorDeals.length})
+                                  </h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {instructorDeals.map((deal) => (
+                                      <Badge
+                                        key={deal.id}
+                                        variant="outline"
+                                        className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800"
+                                        data-testid={`badge-deal-${deal.id}`}
+                                      >
+                                        <DollarSign className="w-3 h-3 mr-1" />
+                                        {deal.dealName}
+                                        {deal.stage && (
+                                          <span className="ml-1.5 text-muted-foreground">
+                                            {dealStageLabels?.[deal.stage] || deal.stage}
+                                          </span>
+                                        )}
+                                        {deal.amount && (
+                                          <span className="ml-1.5 font-semibold">
+                                            ${Number(deal.amount).toLocaleString()}
+                                          </span>
+                                        )}
                                       </Badge>
                                     ))}
                                   </div>
