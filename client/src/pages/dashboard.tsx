@@ -398,36 +398,41 @@ function QuickActions() {
   const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
 
   return (
-    <Card data-testid="card-quick-actions">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg">Quick Actions</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <Button
-            variant="outline"
-            className="justify-start gap-2"
-            onClick={() => setLocation(`/planner?date=${tomorrow}`)}
-            data-testid="button-plan-tomorrow"
-          >
-            <Calendar className="w-4 h-4" />
-            Plan Tomorrow
-          </Button>
-          <Link href="/visits">
-            <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-log-visit">
-              <ClipboardList className="w-4 h-4" />
-              Log a Visit
-            </Button>
-          </Link>
-          <Link href="/planner">
-            <Button variant="outline" className="w-full justify-start gap-2" data-testid="button-add-meeting">
-              <Plus className="w-4 h-4" />
-              Add Meeting
-            </Button>
-          </Link>
-        </div>
-      </CardContent>
-    </Card>
+    <div
+      className="rounded-xl bg-slate-900 p-3 flex items-center gap-2 flex-wrap"
+      data-testid="card-quick-actions"
+    >
+      <span className="text-sm font-medium text-slate-400 px-2 shrink-0">Quick Actions</span>
+      <Button
+        variant="ghost"
+        className="text-slate-300 bg-transparent rounded-xl"
+        onClick={() => setLocation(`/planner?date=${tomorrow}`)}
+        data-testid="button-plan-tomorrow"
+      >
+        <Calendar className="w-4 h-4 mr-2" />
+        Plan Tomorrow
+      </Button>
+      <Link href="/visits">
+        <Button
+          variant="ghost"
+          className="text-slate-300 bg-transparent rounded-xl"
+          data-testid="button-log-meeting"
+        >
+          <ClipboardList className="w-4 h-4 mr-2" />
+          Log a Meeting
+        </Button>
+      </Link>
+      <Link href="/planner">
+        <Button
+          variant="ghost"
+          className="text-slate-300 bg-transparent rounded-xl"
+          data-testid="button-add-meeting"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add Meeting
+        </Button>
+      </Link>
+    </div>
   );
 }
 
@@ -458,33 +463,6 @@ export default function Dashboard() {
       <div className="space-y-2">
         <h1 className="text-3xl font-display font-bold" data-testid="text-dashboard-title">Dashboard</h1>
         <p className="text-muted-foreground">Welcome back! Here's what's happening on campus.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Active Instructors"
-          value={instructors?.length || 0}
-          icon={Users}
-          color="primary"
-        />
-        <StatCard
-          title="Student Reach"
-          value={totalStudents.toLocaleString()}
-          icon={BookOpen}
-          color="blue"
-        />
-        <StatCard
-          title="Today's Meetings"
-          value={todayMeetingCount}
-          icon={Clock}
-          color="orange"
-        />
-        <StatCard
-          title="This Week"
-          value={`${weekMeetingCount} planned`}
-          icon={Calendar}
-          color="green"
-        />
       </div>
 
       <QuickActions />
@@ -524,6 +502,33 @@ export default function Dashboard() {
         {instructors && instructors.length > 0 && (
           <InstitutionBreakdown instructors={instructors} />
         )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Active Instructors"
+          value={instructors?.length || 0}
+          icon={Users}
+          color="primary"
+        />
+        <StatCard
+          title="Student Reach"
+          value={totalStudents.toLocaleString()}
+          icon={BookOpen}
+          color="blue"
+        />
+        <StatCard
+          title="Today's Meetings"
+          value={todayMeetingCount}
+          icon={Clock}
+          color="orange"
+        />
+        <StatCard
+          title="This Week"
+          value={`${weekMeetingCount} planned`}
+          icon={Calendar}
+          color="green"
+        />
       </div>
     </Layout>
   );
