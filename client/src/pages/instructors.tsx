@@ -793,6 +793,21 @@ export default function Instructors() {
     return map;
   }, [allDeals]);
 
+  const deleteDealMutation = useMutation({
+    mutationFn: async (dealId: number) => {
+      await apiRequest("DELETE", `/api/deals/${dealId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      toast({ title: "Deal deleted" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to delete deal", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const [dealToDelete, setDealToDelete] = useState<{ id: number; name: string } | null>(null);
+
   const institutions = useMemo(() => {
     const insts = new Set<string>();
     instructors?.forEach(i => {
@@ -1171,25 +1186,34 @@ export default function Instructors() {
                                   </h4>
                                   <div className="flex flex-wrap gap-2">
                                     {instructorDeals.map((deal) => (
-                                      <Badge
-                                        key={deal.id}
-                                        variant="outline"
-                                        className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800"
-                                        data-testid={`badge-deal-${deal.id}`}
-                                      >
-                                        <DollarSign className="w-3 h-3 mr-1" />
-                                        {deal.dealName}
-                                        {deal.stage && (
-                                          <span className="ml-1.5 text-muted-foreground">
-                                            {dealStageLabels?.[deal.stage] || deal.stage}
-                                          </span>
-                                        )}
-                                        {deal.amount && (
-                                          <span className="ml-1.5 font-semibold">
-                                            ${Number(deal.amount).toLocaleString()}
-                                          </span>
-                                        )}
-                                      </Badge>
+                                      <div key={deal.id} className="flex items-center gap-0.5">
+                                        <Badge
+                                          variant="outline"
+                                          className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800"
+                                          data-testid={`badge-deal-${deal.id}`}
+                                        >
+                                          <DollarSign className="w-3 h-3 mr-1" />
+                                          {deal.dealName}
+                                          {deal.stage && (
+                                            <span className="ml-1.5 text-muted-foreground">
+                                              {dealStageLabels?.[deal.stage] || deal.stage}
+                                            </span>
+                                          )}
+                                          {deal.amount && (
+                                            <span className="ml-1.5 font-semibold">
+                                              ${Number(deal.amount).toLocaleString()}
+                                            </span>
+                                          )}
+                                        </Badge>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          onClick={() => setDealToDelete({ id: deal.id, name: deal.dealName })}
+                                          data-testid={`button-delete-deal-${deal.id}`}
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </Button>
+                                      </div>
                                     ))}
                                   </div>
                                 </div>
@@ -1414,6 +1438,30 @@ export default function Instructors() {
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-delete-course">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteCourse} data-testid="button-confirm-delete-course">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={dealToDelete !== null} onOpenChange={(open) => { if (!open) setDealToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Deal</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{dealToDelete?.name}"? This will remove the deal from your local records. It will not affect HubSpot.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-deal">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (dealToDelete) {
+                  deleteDealMutation.mutate(dealToDelete.id);
+                  setDealToDelete(null);
+                }
+              }}
+              data-testid="button-confirm-delete-deal"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

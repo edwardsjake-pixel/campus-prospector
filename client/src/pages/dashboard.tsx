@@ -461,8 +461,8 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="space-y-2">
-        <h1 className="text-3xl font-display font-bold" data-testid="text-dashboard-title">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back! Here's what's happening on campus.</p>
+        <h1 className="text-3xl font-display font-bold" data-testid="text-dashboard-title">Campus Overview</h1>
+        <p className="text-muted-foreground">Your meetings, faculty, and pipeline at a glance.</p>
       </div>
 
       <QuickActions />

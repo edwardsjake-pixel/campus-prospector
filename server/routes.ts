@@ -446,6 +446,14 @@ export async function registerRoutes(
     res.json(deals);
   });
 
+  app.delete("/api/deals/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid deal ID" });
+    await storage.deleteDeal(id);
+    res.json({ success: true });
+  });
+
   // === HubSpot Sync ===
   app.post("/api/hubspot/sync", async (req, res) => {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });

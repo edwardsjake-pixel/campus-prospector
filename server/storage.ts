@@ -62,6 +62,7 @@ export interface IStorage {
   getDealsByInstructor(instructorId: number): Promise<Deal[]>;
   getAllDeals(): Promise<Deal[]>;
   upsertDeal(deal: InsertDeal): Promise<Deal>;
+  deleteDeal(id: number): Promise<void>;
 
   // Lookup
   getInstructorByEmail(email: string): Promise<Instructor | undefined>;
@@ -261,6 +262,10 @@ export class DatabaseStorage implements IStorage {
     }
     const [created] = await db.insert(deals).values(deal).returning();
     return created;
+  }
+
+  async deleteDeal(id: number): Promise<void> {
+    await db.delete(deals).where(eq(deals.id, id));
   }
 
   async bulkCreateInstructors(items: InsertInstructor[]): Promise<{ created: Instructor[]; existing: Instructor[]; updated: Instructor[]; skippedCount: number }> {
