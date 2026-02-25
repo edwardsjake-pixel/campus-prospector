@@ -192,6 +192,7 @@ export async function syncHubSpotData(
     createInstructor: (data: any) => Promise<any>;
     updateInstructor: (id: number, data: any) => Promise<any>;
     upsertDeal: (data: any) => Promise<any>;
+    findOrCreateDepartment: (instName: string, deptName: string) => Promise<any>;
   }
 ): Promise<HubSpotSyncResult> {
   const client = await getUncachableHubSpotClient();
@@ -217,6 +218,8 @@ export async function syncHubSpotData(
         const contacts = await getContactsForCompany(client, company.id);
         result.contactsFound += contacts.length;
 
+        const dept = await storage.findOrCreateDepartment(realCompanyName, "General");
+
         for (const contact of contacts) {
           if (!contact.email) continue;
           if (seenContactIds.has(contact.id)) continue;
@@ -229,16 +232,18 @@ export async function syncHubSpotData(
 
           let instructorId: number;
           if (existing) {
-            await storage.updateInstructor(existing.id, {
-              institution: realCompanyName,
-            });
+            if (!existing.departmentId) {
+              await storage.updateInstructor(existing.id, {
+                departmentId: dept.id,
+              });
+            }
             instructorId = existing.id;
             result.instructorsUpdated++;
           } else {
             const newInstructor = await storage.createInstructor({
               name: fullName,
               email: contact.email,
-              institution: realCompanyName,
+              departmentId: dept.id,
             });
             instructorId = newInstructor.id;
             result.instructorsCreated++;
@@ -490,6 +495,8 @@ export async function importSelectedContacts(
     upsertDeal: (data: any) => Promise<any>;
     createCourse?: (data: any) => Promise<any>;
     getCoursesByInstructor?: (instructorId: number) => Promise<any[]>;
+    addCourseInstructor?: (link: any) => Promise<any>;
+    findOrCreateDepartment?: (instName: string, deptName: string) => Promise<any>;
   }
 ): Promise<{ instructorsCreated: number; dealsImported: number; coursesCreated: number; skipped: number }> {
   let instructorsCreated = 0;
@@ -508,10 +515,15 @@ export async function importSelectedContacts(
         continue;
       }
     } else {
+      let departmentId: number | null = null;
+      if (storage.findOrCreateDepartment && contact.company) {
+        const dept = await storage.findOrCreateDepartment(contact.company, "General");
+        departmentId = dept.id;
+      }
       const newInstructor = await storage.createInstructor({
         name: contact.name,
         email: contact.email,
-        institution: contact.company,
+        departmentId,
       });
       instructorId = newInstructor.id;
       instructorsCreated++;
@@ -539,14 +551,20 @@ export async function importSelectedContacts(
         const courseInfo = extractCourseFromDealName(deal.dealName, contact.name);
         if (courseInfo && !existingCourseNames.has(courseInfo.courseName.toLowerCase())) {
           try {
-            await storage.createCourse({
+            const course = await storage.createCourse({
               name: courseInfo.courseName,
               code: courseInfo.courseName.substring(0, 20),
               term: courseInfo.term,
               format: 'in-person',
               enrollment: 0,
-              instructorId,
             });
+            if (storage.addCourseInstructor && course) {
+              await storage.addCourseInstructor({
+                courseId: course.id,
+                instructorId,
+                role: "primary",
+              });
+            }
             existingCourseNames.add(courseInfo.courseName.toLowerCase());
             coursesCreated++;
           } catch (e) {

@@ -12,15 +12,42 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Set up Replit Auth
   await setupAuth(app);
   registerAuthRoutes(app);
+
+  // === Institutions ===
+  app.get("/api/institutions", async (req, res) => {
+    const { classification, state, search } = req.query;
+    const filters: { classification?: string; state?: string; search?: string } = {};
+    if (classification && typeof classification === "string") filters.classification = classification;
+    if (state && typeof state === "string") filters.state = state;
+    if (search && typeof search === "string") filters.search = search;
+    const result = await storage.getInstitutions(filters);
+    res.json(result);
+  });
+
+  // === Departments ===
+  app.get(api.departments.list.path, async (req, res) => {
+    const institutionId = req.query.institutionId ? Number(req.query.institutionId) : undefined;
+    const depts = await storage.getDepartments(institutionId);
+    res.json(depts);
+  });
+
+  app.post(api.departments.create.path, async (req, res) => {
+    try {
+      const input = api.departments.create.input.parse(req.body);
+      const dept = await storage.createDepartment(input);
+      res.status(201).json(dept);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
 
   // === Instructors ===
   app.get(api.instructors.list.path, async (req, res) => {
     const filters = {
-      department: req.query.department as string,
-      institution: req.query.institution as string,
+      departmentId: req.query.departmentId ? Number(req.query.departmentId) : undefined,
+      institutionId: req.query.institutionId ? Number(req.query.institutionId) : undefined,
       targetPriority: req.query.targetPriority as string,
       search: req.query.search as string,
     };
@@ -80,8 +107,16 @@ export async function registerRoutes(
 
   app.post(api.courses.create.path, async (req, res) => {
     try {
-      const input = api.courses.create.input.parse(req.body);
+      const { instructorId, ...courseData } = req.body;
+      const input = api.courses.create.input.parse(courseData);
       const course = await storage.createCourse(input);
+      if (instructorId) {
+        await storage.addCourseInstructor({
+          courseId: course.id,
+          instructorId: Number(instructorId),
+          role: "primary",
+        });
+      }
       res.status(201).json(course);
     } catch (error) {
       res.status(400).json({ message: "Invalid input" });
@@ -103,6 +138,32 @@ export async function registerRoutes(
       res.json({ message: "Deleted" });
     } catch (error) {
       res.status(404).json({ message: "Course not found" });
+    }
+  });
+
+  // === Course Instructors ===
+  app.get(api.courseInstructors.list.path, async (req, res) => {
+    const courseId = req.query.courseId ? Number(req.query.courseId) : undefined;
+    const links = await storage.getCourseInstructors(courseId);
+    res.json(links);
+  });
+
+  app.post(api.courseInstructors.create.path, async (req, res) => {
+    try {
+      const input = api.courseInstructors.create.input.parse(req.body);
+      const link = await storage.addCourseInstructor(input);
+      res.status(201).json(link);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
+  app.delete("/api/course-instructors/:id", async (req, res) => {
+    try {
+      await storage.removeCourseInstructor(Number(req.params.id));
+      res.json({ message: "Deleted" });
+    } catch (error) {
+      res.status(404).json({ message: "Link not found" });
     }
   });
 
@@ -154,7 +215,7 @@ export async function registerRoutes(
       const input = api.visits.create.input.parse(req.body);
       const visit = await storage.createVisit({
         ...input,
-        userId: (req.user as any).claims.sub // User ID from Replit Auth
+        userId: (req.user as any).claims.sub
       });
       res.status(201).json(visit);
     } catch (error) {
@@ -221,26 +282,38 @@ export async function registerRoutes(
     const dayOfWeek = req.query.dayOfWeek as string;
     if (!dayOfWeek) return res.status(400).json({ message: "dayOfWeek is required" });
 
-    const institution = req.query.institution as string | undefined;
+    const institutionId = req.query.institutionId ? Number(req.query.institutionId) : undefined;
     const showAll = req.query.showAll === "true";
 
     const filters: any = {};
-    if (institution) filters.institution = institution;
+    if (institutionId) filters.institutionId = institutionId;
     const allInstructors = await storage.getInstructors(filters);
     const allOfficeHours = await storage.getOfficeHours();
+    const allCourseInstructorLinks = await storage.getCourseInstructors();
     const allCourses = await storage.getCourses();
+
+    const coursesByInstructor = new Map<number, number[]>();
+    for (const ci of allCourseInstructorLinks) {
+      const list = coursesByInstructor.get(ci.instructorId) || [];
+      list.push(ci.courseId);
+      coursesByInstructor.set(ci.instructorId, list);
+    }
+    const courseMap = new Map(allCourses.map(c => [c.id, c]));
 
     const result = allInstructors.map(instructor => {
       const oh = allOfficeHours.filter(
         o => o.instructorId === instructor.id && o.dayOfWeek === dayOfWeek
       );
-      const lectures = allCourses.filter(
-        c => c.instructorId === instructor.id &&
-          c.daysOfWeek && c.daysOfWeek.split(",").map(d => d.trim()).includes(dayOfWeek) &&
+
+      const instructorCourseIds = coursesByInstructor.get(instructor.id) || [];
+      const instructorCourses = instructorCourseIds.map(id => courseMap.get(id)).filter(Boolean) as typeof allCourses;
+
+      const lectures = instructorCourses.filter(
+        c => c.daysOfWeek && c.daysOfWeek.split(",").map(d => d.trim()).includes(dayOfWeek) &&
           c.lectureStartTime && c.lectureEndTime
       );
+
       if (!showAll && oh.length === 0 && lectures.length === 0) return null;
-      const instructorCourses = allCourses.filter(c => c.instructorId === instructor.id);
       const allOh = allOfficeHours.filter(o => o.instructorId === instructor.id);
       return {
         instructor,
@@ -280,7 +353,7 @@ export async function registerRoutes(
         u: "Sunday", su: "Sunday", sun: "Sunday", sunday: "Sunday",
       };
 
-      function parseDays(raw: string): string {
+      const parseDays = (raw: string): string => {
         if (!raw || !raw.trim()) return "";
         const cleaned = raw.trim();
         if (/^[MTWRFSU]+$/i.test(cleaned) && cleaned.length <= 7) {
@@ -292,7 +365,7 @@ export async function registerRoutes(
         return days.length > 0 ? days.join(",") : cleaned;
       }
 
-      function parseTime(raw: string): string | null {
+      const parseTime = (raw: string): string | null => {
         if (!raw || !raw.trim()) return null;
         const t = raw.trim();
         const hhmm = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(am|pm))?$/i);
@@ -332,8 +405,8 @@ export async function registerRoutes(
           instructor: {
             name: String(row.name || "").trim(),
             email: row.email ? String(row.email).trim() : null,
-            department: row.department ? String(row.department).trim() : null,
-            institution: row.institution ? String(row.institution).trim() : null,
+            departmentName: row.department ? String(row.department).trim() : null,
+            institutionName: row.institution ? String(row.institution).trim() : null,
             officeLocation: row.officeLocation || row.office_location ? String(row.officeLocation || row.office_location).trim() : null,
             bio: row.bio ? String(row.bio).trim() : null,
             notes: row.notes ? String(row.notes).trim() : null,
@@ -353,7 +426,6 @@ export async function registerRoutes(
         };
       }).filter(p => p.instructor.name.length > 0);
       const items = parsed.map(p => p.instructor);
-      const courseNames = parsed.map(p => p.courseName);
       const result = await storage.bulkCreateInstructors(items);
 
       let coursesCreated = 0;
@@ -365,18 +437,23 @@ export async function registerRoutes(
           const instructor = allInstructors.find(inst => inst.name.toLowerCase().trim() === normalizedName);
           if (instructor) {
             const code = cName.split(/\s+/).slice(0, 2).join(" ").substring(0, 20);
-            await storage.createCourse({
+            const course = await storage.createCourse({
               code: code,
               name: cName,
               term: "Current",
               format: "in-person",
               enrollment: parsed[i].enrollment || 0,
-              instructorId: instructor.id,
+              departmentId: instructor.departmentId,
               daysOfWeek: parsed[i].daysOfWeek || null,
               lectureStartTime: parsed[i].lectureStartTime || null,
               lectureEndTime: parsed[i].lectureEndTime || null,
               building: parsed[i].building || null,
               room: parsed[i].room || null,
+            });
+            await storage.addCourseInstructor({
+              courseId: course.id,
+              instructorId: instructor.id,
+              role: "primary",
             });
             coursesCreated++;
           }
@@ -425,7 +502,6 @@ export async function registerRoutes(
         term: String(row.term || "").trim(),
         format: String(row.format || "in-person").trim(),
         enrollment: row.enrollment ? Number(row.enrollment) : 0,
-        instructorId: row.instructorId || row.instructor_id ? Number(row.instructorId || row.instructor_id) : null,
       })).filter(item => item.code.length > 0 && item.name.length > 0);
       const created = await storage.bulkCreateCourses(items);
       res.json({ imported: created.length });
@@ -467,6 +543,7 @@ export async function registerRoutes(
         createInstructor: (data) => storage.createInstructor(data),
         updateInstructor: (id, data) => storage.updateInstructor(id, data),
         upsertDeal: (data) => storage.upsertDeal(data),
+        findOrCreateDepartment: (instName, deptName) => storage.findOrCreateDepartment(instName, deptName),
       });
       res.json(result);
     } catch (error: any) {
@@ -547,6 +624,8 @@ export async function registerRoutes(
         upsertDeal: (data) => storage.upsertDeal(data),
         createCourse: (data) => storage.createCourse(data),
         getCoursesByInstructor: (instructorId) => storage.getCourses(instructorId),
+        addCourseInstructor: (link) => storage.addCourseInstructor(link),
+        findOrCreateDepartment: (instName, deptName) => storage.findOrCreateDepartment(instName, deptName),
       });
       res.json(result);
     } catch (error: any) {
@@ -626,8 +705,8 @@ export async function registerRoutes(
       const instructorRows = faculty.map((f: any) => ({
         name: f.name || "",
         email: f.email || null,
-        department: f.department || null,
-        institution: f.institution || null,
+        departmentName: f.department || null,
+        institutionName: f.institution || institutionName || null,
         bio: f.course ? `Courses: ${f.course}` : null,
         notes: f.notes || "Uses Packback",
         targetPriority: "medium",
@@ -651,17 +730,6 @@ export async function registerRoutes(
     }
   });
 
-  // === Institutions ===
-  app.get("/api/institutions", async (req, res) => {
-    const { classification, state, search } = req.query;
-    const filters: { classification?: string; state?: string; search?: string } = {};
-    if (classification && typeof classification === "string") filters.classification = classification;
-    if (state && typeof state === "string") filters.state = state;
-    if (search && typeof search === "string") filters.search = search;
-    const result = await storage.getInstitutions(filters);
-    res.json(result);
-  });
-
   // Seed institutions from JSON data
   const existingInstitutions = await storage.getInstitutions();
   if (existingInstitutions.length === 0) {
@@ -676,73 +744,6 @@ export async function registerRoutes(
     } catch (e) {
       console.error("Failed to seed institutions:", e);
     }
-  }
-
-  // Seed data if empty
-  const existingInstructors = await storage.getInstructors();
-  if (existingInstructors.length === 0) {
-    const i1 = await storage.createInstructor({
-      name: "Dr. Alan Grant",
-      email: "agrant@university.edu",
-      department: "Paleontology",
-      officeLocation: "Science Hall 101",
-      bio: "Focuses on dinosaur behavior.",
-      targetPriority: "high",
-      notes: "Prefer email contact.",
-    });
-    const i2 = await storage.createInstructor({
-      name: "Dr. Ellie Sattler",
-      email: "esattler@university.edu",
-      department: "Paleobotany",
-      officeLocation: "Science Hall 102",
-      bio: "Expert in prehistoric plants.",
-      targetPriority: "medium",
-      notes: "Office hours are busy.",
-    });
-
-    await storage.createCourse({
-      code: "PAL101",
-      name: "Intro to Paleontology",
-      term: "Spring 2024",
-      format: "in-person",
-      enrollment: 150,
-      instructorId: i1.id,
-      daysOfWeek: "Monday,Wednesday,Friday",
-      lectureStartTime: "09:00",
-      lectureEndTime: "10:00",
-      building: "Science Hall",
-      room: "200",
-    });
-    await storage.createCourse({
-      code: "BOT201",
-      name: "Ancient Flora",
-      term: "Spring 2024",
-      format: "hybrid",
-      enrollment: 45,
-      instructorId: i2.id,
-      daysOfWeek: "Tuesday,Thursday",
-      lectureStartTime: "13:00",
-      lectureEndTime: "14:30",
-      building: "Greenhouse",
-      room: "A1",
-    });
-
-    await storage.createOfficeHour({
-      instructorId: i1.id,
-      dayOfWeek: "Monday",
-      startTime: "14:00",
-      endTime: "16:00",
-      location: "Science Hall 101",
-      isVirtual: false,
-    });
-    await storage.createOfficeHour({
-      instructorId: i2.id,
-      dayOfWeek: "Tuesday",
-      startTime: "10:00",
-      endTime: "12:00",
-      location: "Zoom",
-      isVirtual: true,
-    });
   }
 
   return httpServer;

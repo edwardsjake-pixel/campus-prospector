@@ -260,7 +260,8 @@ export default function Availability() {
   const departments = useMemo(() => {
     const depts = new Set<string>();
     rows.forEach(r => {
-      if (r.instructor.department) depts.add(r.instructor.department);
+      const deptName = (r.instructor as any).department?.name;
+      if (deptName) depts.add(deptName);
     });
     return Array.from(depts).sort();
   }, [rows]);
@@ -268,7 +269,8 @@ export default function Availability() {
   const institutions = useMemo(() => {
     const insts = new Set<string>();
     rows.forEach(r => {
-      if (r.instructor.institution) insts.add(r.instructor.institution);
+      const instName = (r.instructor as any).department?.institution?.name;
+      if (instName) insts.add(instName);
     });
     return Array.from(insts).sort();
   }, [rows]);
@@ -276,7 +278,7 @@ export default function Availability() {
   const filteredRows = useMemo(() => {
     let filtered = rows;
     if (departmentFilter !== "all") {
-      filtered = filtered.filter(r => r.instructor.department === departmentFilter);
+      filtered = filtered.filter(r => (r.instructor as any).department?.name === departmentFilter);
     }
     return filtered;
   }, [rows, departmentFilter]);
@@ -424,13 +426,13 @@ export default function Availability() {
                             <p className="font-medium text-sm truncate" data-testid={`text-instructor-name-${row.instructor.id}`}>
                               {row.instructor.name}
                             </p>
-                            {row.instructor.institution && (
+                            {(row.instructor as any).department?.institution?.name && (
                               <span className="text-[11px] text-muted-foreground truncate block">
-                                {row.instructor.institution}
+                                {(row.instructor as any).department.institution.name}
                               </span>
                             )}
-                            {row.instructor.department && (
-                              <span className="text-[10px] text-muted-foreground truncate block">{row.instructor.department}</span>
+                            {(row.instructor as any).department?.name && (
+                              <span className="text-[10px] text-muted-foreground truncate block">{(row.instructor as any).department.name}</span>
                             )}
                             {(() => {
                               const bldg = (row.courses || []).find((c: any) => c.building)?.building || null;

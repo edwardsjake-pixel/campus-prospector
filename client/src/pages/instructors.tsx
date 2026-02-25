@@ -133,28 +133,18 @@ function InstructorForm({
 
         <FormField
           control={form.control}
-          name="institution"
+          name="departmentId"
           render={({ field }) => (
             <FormItem>
-              <Label>Institution</Label>
-              <FormControl><Input placeholder="State University" {...field} value={field.value || ''} data-testid="input-instructor-institution" /></FormControl>
+              <Label>Department</Label>
+              <FormControl><Input type="hidden" {...field} value={field.value || ''} /></FormControl>
+              <p className="text-xs text-muted-foreground">Department is set via the institution hierarchy.</p>
               <FormMessage />
             </FormItem>
           )}
         />
 
         <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="department"
-            render={({ field }) => (
-              <FormItem>
-                <Label>Department</Label>
-                <FormControl><Input placeholder="Computer Science" {...field} value={field.value || ''} data-testid="input-instructor-department" /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
           <FormField
             control={form.control}
             name="officeLocation"
@@ -864,7 +854,8 @@ export default function Instructors() {
   const institutions = useMemo(() => {
     const insts = new Set<string>();
     instructors?.forEach(i => {
-      if (i.institution) insts.add(i.institution);
+      const instName = (i as any).department?.institution?.name;
+      if (instName) insts.add(instName);
     });
     return Array.from(insts).sort();
   }, [instructors]);
@@ -873,15 +864,18 @@ export default function Instructors() {
     let filtered = instructors || [];
     if (search) {
       const s = search.toLowerCase();
-      filtered = filtered.filter(i => 
-        i.name.toLowerCase().includes(s) ||
-        i.department?.toLowerCase().includes(s) ||
-        i.institution?.toLowerCase().includes(s) ||
-        i.courses?.some(c => c.name.toLowerCase().includes(s) || c.code.toLowerCase().includes(s))
-      );
+      filtered = filtered.filter(i => {
+        const dept = (i as any).department;
+        const instName = dept?.institution?.name || "";
+        const deptName = dept?.name || "";
+        return i.name.toLowerCase().includes(s) ||
+          deptName.toLowerCase().includes(s) ||
+          instName.toLowerCase().includes(s) ||
+          i.courses?.some(c => c.name.toLowerCase().includes(s) || c.code.toLowerCase().includes(s));
+      });
     }
     if (institutionFilter !== "all") {
-      filtered = filtered.filter(i => i.institution === institutionFilter);
+      filtered = filtered.filter(i => (i as any).department?.institution?.name === institutionFilter);
     }
     return filtered;
   }, [instructors, search, institutionFilter]);
@@ -975,8 +969,7 @@ export default function Instructors() {
   const emptyInstructorDefaults: InsertInstructor = {
     name: "",
     email: "",
-    department: "",
-    institution: "",
+    departmentId: null,
     officeLocation: "",
     bio: "",
     targetPriority: "medium",
@@ -1142,15 +1135,15 @@ export default function Instructors() {
                         </TableCell>
                         <TableCell>
                           <div className="font-medium text-slate-900" data-testid={`text-name-${instructor.id}`}>{instructor.name}</div>
-                          {instructor.department && (
-                            <div className="text-xs text-slate-500">{instructor.department}</div>
+                          {(instructor as any).department?.name && (
+                            <div className="text-xs text-slate-500">{(instructor as any).department.name}</div>
                           )}
                         </TableCell>
                         <TableCell>
-                          {instructor.institution ? (
+                          {(instructor as any).department?.institution?.name ? (
                             <div className="flex items-center text-sm text-slate-600">
                               <Building2 className="w-3 h-3 mr-2 text-slate-400" />
-                              {instructor.institution}
+                              {(instructor as any).department.institution.name}
                             </div>
                           ) : (
                             <span className="text-xs text-muted-foreground">--</span>
@@ -1410,8 +1403,7 @@ export default function Instructors() {
               defaultValues={{
                 name: editingInstructor.name,
                 email: editingInstructor.email || "",
-                department: editingInstructor.department || "",
-                institution: editingInstructor.institution || "",
+                departmentId: editingInstructor.departmentId,
                 officeLocation: editingInstructor.officeLocation || "",
                 bio: editingInstructor.bio || "",
                 notes: editingInstructor.notes || "",
@@ -1459,7 +1451,7 @@ export default function Instructors() {
                 term: editingCourse.term,
                 format: editingCourse.format,
                 enrollment: editingCourse.enrollment || 0,
-                instructorId: editingCourse.instructorId,
+                instructorId: null,
                 daysOfWeek: editingCourse.daysOfWeek || "",
                 lectureStartTime: editingCourse.lectureStartTime || "",
                 lectureEndTime: editingCourse.lectureEndTime || "",

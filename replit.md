@@ -44,17 +44,37 @@ Preferred communication style: Simple, everyday language.
 - **Schema Location**: `shared/schema.ts` (main tables) and `shared/models/auth.ts` (auth tables)
 - **Schema Push**: `npm run db:push` uses drizzle-kit to push schema changes directly to the database
 
+### Data Model Hierarchy
+
+The data model follows a proper relational hierarchy:
+
+```
+Institutions → Departments → Instructors (via departmentId FK)
+                           → Courses (via departmentId FK)
+Instructors ↔ Courses (many-to-many via course_instructors join table)
+Instructors → Office Hours (via instructorId FK)
+Instructors → Deals (via instructorId FK, optional courseId FK)
+Instructors → Planned Meetings (via instructorId FK)
+```
+
 ### Database Tables
-- `institutions` — R1/R2 Carnegie Classification universities: name, city, state, control (Public/Private), classification (R1/R2), domain (.edu domain); seeded from `shared/data/institutions.json` on startup (326 entries)
-- `instructors` — Name, email, department, institution, office location, bio, notes, target priority
-- `courses` — Code, name, term, format, enrollment, linked to instructor; also stores lecture schedule (daysOfWeek, lectureStartTime, lectureEndTime, building, room)
-- `office_hours` — Day of week, start/end time, location, virtual flag, linked to instructor
-- `visits` — Date, location, notes, linked to user (sales rep)
-- `visit_interactions` — Interactions during visits (linked to visits)
-- `planned_meetings` — Date, start/end time, instructor, location, purpose, status, meetingType (scheduled/drop_in), notes, linked to user
-- `deals` — HubSpot deal data: hubspotDealId, dealName, stage, amount, closeDate, pipeline, linked to instructor; synced from HubSpot CRM
+- `institutions` — R1/R2 Carnegie Classification universities: id, name (unique), city, state, control (Public/Private), classification (R1/R2), domain (.edu domain); seeded from `shared/data/institutions.json` on startup (326 entries)
+- `departments` — id, name, institutionId (FK to institutions); represents academic departments within an institution
+- `instructors` — id, name (unique), email, departmentId (FK to departments, nullable), officeLocation, bio, notes, targetPriority, createdAt
+- `courses` — id, code, name, term, format, enrollment, departmentId (FK to departments, nullable), daysOfWeek, lectureStartTime, lectureEndTime, building, room
+- `course_instructors` — id, courseId (FK to courses), instructorId (FK to instructors), role (default "primary"); many-to-many join table
+- `office_hours` — Day of week, start/end time, location, virtual flag, linked to instructor via instructorId FK
+- `visits` — Date, location, notes, linked to user (sales rep) via userId
+- `visit_interactions` — Interactions during visits (linked to visits via visitId, and instructors via instructorId)
+- `planned_meetings` — Date, start/end time, instructor, location, purpose, status, meetingType (scheduled/drop_in), notes, linked to user and instructor
+- `deals` — HubSpot deal data: hubspotDealId, dealName, stage, amount, closeDate, pipeline, linked to instructor (instructorId FK) and optionally course (courseId FK); synced from HubSpot CRM
 - `sessions` — Session storage for Replit Auth (mandatory, do not drop)
 - `users` — User storage for Replit Auth (mandatory, do not drop)
+
+### Key Types
+- `InstructorWithDetails` — Returned by `getInstructors()`: includes `department: DepartmentWithInstitution | null` (where `DepartmentWithInstitution` has `institution: Institution`), `courses: Course[]`, `officeHours: OfficeHour[]`
+- `DepartmentWithInstitution` — Department object with nested `institution: Institution`
+- Frontend accesses institution name via `instructor.department?.institution?.name` and department name via `instructor.department?.name`
 
 ### Key Components
 - `client/src/components/csv-import.tsx` — Reusable CSV import dialog (parses CSV, column mapping, preview, bulk upload)
@@ -64,6 +84,7 @@ Preferred communication style: Simple, everyday language.
 ### Storage Layer
 - `server/storage.ts` defines an `IStorage` interface and `DatabaseStorage` implementation
 - All database operations go through the storage layer, making it easy to swap implementations
+- Key methods: `getDepartments()`, `findOrCreateDepartment()`, `getInstructors()` (returns InstructorWithDetails with department/institution joins), `bulkCreateInstructors()` (accepts `institutionName`/`departmentName` to auto-create hierarchy), `addCourseInstructor()`, `removeCourseInstructorsForInstructor()`
 
 ### Key Development Commands
 - `npm run dev` — Start development server with HMR
@@ -104,8 +125,8 @@ Preferred communication style: Simple, everyday language.
 - **Integration**: Connected via Replit native HubSpot connector (OAuth-based, auto-refreshing tokens)
 - **Sync scope**: Purdue and Indiana University Bloomington companies
 - **Contact matching**: By email address — matches HubSpot contacts to existing instructors, creates new instructors for unmatched contacts
-- **Institution override**: HubSpot company name overrides the instructor's institution field on sync
-- **Deal import**: Fetches deals associated with matched contacts, stores in `deals` table linked to instructors
+- **Department/Institution handling**: HubSpot company name is used to find or create institution + department via `findOrCreateDepartment()`
+- **Deal import**: Fetches deals associated with matched contacts, stores in `deals` table linked to instructors (and optionally courses via courseId)
 - **API endpoints**: `POST /api/hubspot/sync`, `GET /api/deals`, `GET /api/hubspot/deal-stages`
 - **UI**: "Sync HubSpot" button on Faculty & Courses page, deal pipeline card on Dashboard, deal badges on instructor rows and planner meetings
 
@@ -117,7 +138,7 @@ Preferred communication style: Simple, everyday language.
 - **API endpoint**: `POST /api/scrape/packback` — accepts `{ urls?: string[], domain?: string, institutionName?: string }`, returns `{ created, updated, existing, total_found, urls_scraped }`
 - **Institutions API**: `GET /api/institutions` — returns all 326 R1/R2 universities with filters: `?classification=R1&state=CA&search=stanford`
 - **Institutions data**: `shared/data/institutions.json` — 326 R1/R2 Carnegie Classification universities (187 R1, 139 R2) with name, city, state, control, classification, domain
-- **Import flow**: Scraped faculty are fed through the existing `bulkCreateInstructors` upsert logic (same as CSV import — fills empty fields, avoids duplicates by name). Course info stored in bio field.
+- **Import flow**: Scraped faculty are fed through the existing `bulkCreateInstructors` upsert logic (same as CSV import — uses `institutionName`/`departmentName` to auto-create institution/department hierarchy). Course info stored in bio field.
 - **UI**: "Find Packback Users" button on Faculty & Courses page opens a dialog with searchable institution picker (all 326 universities) and optional custom URLs
 - **Timeout**: 2 minutes max for the scraping subprocess
 

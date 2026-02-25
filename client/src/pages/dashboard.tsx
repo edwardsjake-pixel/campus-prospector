@@ -352,7 +352,7 @@ function InstitutionBreakdown({ instructors }: { instructors: Instructor[] }) {
   const groups = useMemo(() => {
     const map = new Map<string, number>();
     for (const inst of instructors) {
-      const key = inst.institution || "Unknown";
+      const key = (inst as any).department?.institution?.name || "Unknown";
       map.set(key, (map.get(key) || 0) + 1);
     }
     return Array.from(map.entries())

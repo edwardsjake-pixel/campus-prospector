@@ -477,7 +477,7 @@ export default function Planner() {
                         <SelectContent>
                           {instructors.map((inst) => (
                             <SelectItem key={inst.id} value={String(inst.id)}>
-                              {inst.name} {inst.department ? `— ${inst.department}` : ""}
+                              {inst.name} {(inst as any).department?.name ? `— ${(inst as any).department.name}` : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -852,8 +852,8 @@ export default function Planner() {
                             </div>
                             <div className="min-w-0 flex-1 flex flex-col justify-center">
                               <p className="font-medium text-sm truncate">{row.instructor.name}</p>
-                            {row.instructor.department && (
-                              <span className="text-[10px] text-muted-foreground truncate block">{row.instructor.department}</span>
+                            {(row.instructor as any).department?.name && (
+                              <span className="text-[10px] text-muted-foreground truncate block">{(row.instructor as any).department.name}</span>
                             )}
                             {(() => {
                               const bldg = (row.courses || []).find((c: any) => c.building)?.building || null;

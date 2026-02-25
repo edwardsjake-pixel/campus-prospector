@@ -16,50 +16,62 @@ export const institutions = pgTable("institutions", {
   domain: text("domain"),
 });
 
+export const departments = pgTable("departments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  institutionId: integer("institution_id").references(() => institutions.id).notNull(),
+});
+
 export const instructors = pgTable("instructors", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   email: text("email"),
-  department: text("department"),
-  institution: text("institution"),
+  departmentId: integer("department_id").references(() => departments.id),
   officeLocation: text("office_location"),
   bio: text("bio"),
   notes: text("notes"),
-  targetPriority: text("target_priority").default("medium"), // low, medium, high
+  targetPriority: text("target_priority").default("medium"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const courses = pgTable("courses", {
   id: serial("id").primaryKey(),
-  code: text("code").notNull(), // e.g. CS101
+  code: text("code").notNull(),
   name: text("name").notNull(),
-  term: text("term").notNull(), // e.g. Fall 2023
-  format: text("format").notNull(), // online, in-person, hybrid
+  term: text("term").notNull(),
+  format: text("format").notNull(),
   enrollment: integer("enrollment").default(0),
-  instructorId: integer("instructor_id").references(() => instructors.id),
-  daysOfWeek: text("days_of_week"), // comma-separated: "Monday,Wednesday,Friday"
+  departmentId: integer("department_id").references(() => departments.id),
+  daysOfWeek: text("days_of_week"),
   lectureStartTime: time("lecture_start_time"),
   lectureEndTime: time("lecture_end_time"),
   building: text("building"),
   room: text("room"),
 });
 
+export const courseInstructors = pgTable("course_instructors", {
+  id: serial("id").primaryKey(),
+  courseId: integer("course_id").references(() => courses.id).notNull(),
+  instructorId: integer("instructor_id").references(() => instructors.id).notNull(),
+  role: text("role").default("primary"),
+});
+
 export const officeHours = pgTable("office_hours", {
   id: serial("id").primaryKey(),
   instructorId: integer("instructor_id").references(() => instructors.id).notNull(),
-  dayOfWeek: text("day_of_week").notNull(), // Monday, Tuesday, etc.
+  dayOfWeek: text("day_of_week").notNull(),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
-  location: text("location"), // Can override instructor office
+  location: text("location"),
   isVirtual: boolean("is_virtual").default(false),
 });
 
 export const visits = pgTable("visits", {
   id: serial("id").primaryKey(),
   date: date("date").notNull(),
-  location: text("location").notNull(), // Building/Campus
+  location: text("location").notNull(),
   notes: text("notes"),
-  userId: text("user_id").notNull(), // Sales rep ID from auth
+  userId: text("user_id").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -67,7 +79,7 @@ export const visitInteractions = pgTable("visit_interactions", {
   id: serial("id").primaryKey(),
   visitId: integer("visit_id").references(() => visits.id).notNull(),
   instructorId: integer("instructor_id").references(() => instructors.id).notNull(),
-  outcome: text("outcome"), // met, left_material, unavailable, follow_up
+  outcome: text("outcome"),
   notes: text("notes"),
 });
 
@@ -95,23 +107,54 @@ export const deals = pgTable("deals", {
   closeDate: text("close_date"),
   pipeline: text("pipeline"),
   instructorId: integer("instructor_id").references(() => instructors.id),
+  courseId: integer("course_id").references(() => courses.id),
   hubspotContactId: text("hubspot_contact_id"),
   lastSyncedAt: timestamp("last_synced_at").defaultNow(),
 });
 
 // === RELATIONS ===
 
-export const instructorsRelations = relations(instructors, ({ many }) => ({
+export const institutionsRelations = relations(institutions, ({ many }) => ({
+  departments: many(departments),
+}));
+
+export const departmentsRelations = relations(departments, ({ one, many }) => ({
+  institution: one(institutions, {
+    fields: [departments.institutionId],
+    references: [institutions.id],
+  }),
+  instructors: many(instructors),
   courses: many(courses),
+}));
+
+export const instructorsRelations = relations(instructors, ({ one, many }) => ({
+  department: one(departments, {
+    fields: [instructors.departmentId],
+    references: [departments.id],
+  }),
+  courseInstructors: many(courseInstructors),
   officeHours: many(officeHours),
   interactions: many(visitInteractions),
   plannedMeetings: many(plannedMeetings),
   deals: many(deals),
 }));
 
-export const coursesRelations = relations(courses, ({ one }) => ({
+export const coursesRelations = relations(courses, ({ one, many }) => ({
+  department: one(departments, {
+    fields: [courses.departmentId],
+    references: [departments.id],
+  }),
+  courseInstructors: many(courseInstructors),
+  deals: many(deals),
+}));
+
+export const courseInstructorsRelations = relations(courseInstructors, ({ one }) => ({
+  course: one(courses, {
+    fields: [courseInstructors.courseId],
+    references: [courses.id],
+  }),
   instructor: one(instructors, {
-    fields: [courses.instructorId],
+    fields: [courseInstructors.instructorId],
     references: [instructors.id],
   }),
 }));
@@ -150,13 +193,19 @@ export const dealsRelations = relations(deals, ({ one }) => ({
     fields: [deals.instructorId],
     references: [instructors.id],
   }),
+  course: one(courses, {
+    fields: [deals.courseId],
+    references: [courses.id],
+  }),
 }));
 
 // === BASE SCHEMAS ===
 
 export const insertInstitutionSchema = createInsertSchema(institutions).omit({ id: true });
+export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });
 export const insertInstructorSchema = createInsertSchema(instructors).omit({ id: true, createdAt: true });
 export const insertCourseSchema = createInsertSchema(courses).omit({ id: true });
+export const insertCourseInstructorSchema = createInsertSchema(courseInstructors).omit({ id: true });
 export const insertOfficeHourSchema = createInsertSchema(officeHours).omit({ id: true });
 export const insertVisitSchema = createInsertSchema(visits).omit({ id: true, createdAt: true });
 export const insertVisitInteractionSchema = createInsertSchema(visitInteractions).omit({ id: true });
@@ -167,10 +216,14 @@ export const insertDealSchema = createInsertSchema(deals).omit({ id: true, lastS
 
 export type Institution = typeof institutions.$inferSelect;
 export type InsertInstitution = z.infer<typeof insertInstitutionSchema>;
+export type Department = typeof departments.$inferSelect;
+export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
 export type Instructor = typeof instructors.$inferSelect;
 export type InsertInstructor = z.infer<typeof insertInstructorSchema>;
 export type Course = typeof courses.$inferSelect;
 export type InsertCourse = z.infer<typeof insertCourseSchema>;
+export type CourseInstructor = typeof courseInstructors.$inferSelect;
+export type InsertCourseInstructor = z.infer<typeof insertCourseInstructorSchema>;
 export type OfficeHour = typeof officeHours.$inferSelect;
 export type InsertOfficeHour = z.infer<typeof insertOfficeHourSchema>;
 export type Visit = typeof visits.$inferSelect;
@@ -183,9 +236,14 @@ export type Deal = typeof deals.$inferSelect;
 export type InsertDeal = z.infer<typeof insertDealSchema>;
 
 // Complex types for UI
+export type DepartmentWithInstitution = Department & {
+  institution: Institution;
+};
+
 export type InstructorWithDetails = Instructor & {
   courses: Course[];
   officeHours: OfficeHour[];
+  department: DepartmentWithInstitution | null;
 };
 
 export type VisitWithInteractions = Visit & {

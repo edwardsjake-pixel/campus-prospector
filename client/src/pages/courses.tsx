@@ -185,7 +185,7 @@ function CourseForm({
                 <SelectContent>
                   {instructors.map((instructor) => (
                     <SelectItem key={instructor.id} value={instructor.id.toString()}>
-                      {instructor.name}{instructor.institution ? ` (${instructor.institution})` : ""}
+                      {instructor.name}{(instructor as any).department?.institution?.name ? ` (${(instructor as any).department.institution.name})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -294,22 +294,40 @@ export default function Courses() {
   const updateCourse = useUpdateCourse();
   const deleteCourse = useDeleteCourse();
 
+  const courseToInstructors = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; institutionName: string | null }[]>();
+    instructors?.forEach(inst => {
+      const instName = (inst as any).department?.institution?.name || null;
+      inst.courses?.forEach((c: any) => {
+        const existing = map.get(c.id) || [];
+        if (!existing.some(e => e.id === inst.id)) {
+          existing.push({ id: inst.id, name: inst.name, institutionName: instName });
+        }
+        map.set(c.id, existing);
+      });
+    });
+    return map;
+  }, [instructors]);
+
   const institutions = useMemo(() => {
     const insts = new Set<string>();
     instructors?.forEach(i => {
-      if (i.institution) insts.add(i.institution);
+      const instName = (i as any).department?.institution?.name;
+      if (instName) insts.add(instName);
     });
     return Array.from(insts).sort();
   }, [instructors]);
 
-  const getInstructorName = (id: number | null) => {
-    if (!id) return "Unassigned";
-    return instructors?.find(i => i.id === id)?.name || "Unknown";
+  const getCourseInstructorNames = (courseId: number) => {
+    const insts = courseToInstructors.get(courseId);
+    if (!insts || insts.length === 0) return "Unassigned";
+    return insts.map(i => i.name).join(", ");
   };
 
-  const getInstructorInstitution = (id: number | null) => {
-    if (!id) return null;
-    return instructors?.find(i => i.id === id)?.institution || null;
+  const getCourseInstitution = (courseId: number) => {
+    const insts = courseToInstructors.get(courseId);
+    if (!insts || insts.length === 0) return null;
+    return insts[0]?.institutionName || null;
   };
 
   const filteredCourses = useMemo(() => {
@@ -322,10 +340,10 @@ export default function Courses() {
       );
     }
     if (institutionFilter !== "all") {
-      filtered = filtered.filter(c => getInstructorInstitution(c.instructorId) === institutionFilter);
+      filtered = filtered.filter(c => getCourseInstitution(c.id) === institutionFilter);
     }
     return filtered;
-  }, [courses, search, institutionFilter, instructors]);
+  }, [courses, search, institutionFilter, courseToInstructors]);
 
   const handleCreate = (data: CourseFormData, selectedDays: string[]) => {
     const submitData = {
@@ -478,11 +496,11 @@ export default function Courses() {
                       {course.name}
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm text-slate-600">{getInstructorName(course.instructorId)}</div>
-                      {getInstructorInstitution(course.instructorId) && (
+                      <div className="text-sm text-slate-600">{getCourseInstructorNames(course.id)}</div>
+                      {getCourseInstitution(course.id) && (
                         <div className="text-xs text-muted-foreground flex items-center gap-1">
                           <Building2 className="w-2.5 h-2.5" />
-                          {getInstructorInstitution(course.instructorId)}
+                          {getCourseInstitution(course.id)}
                         </div>
                       )}
                     </TableCell>
@@ -562,7 +580,7 @@ export default function Courses() {
                 term: editingCourse.term,
                 format: editingCourse.format,
                 enrollment: editingCourse.enrollment || 0,
-                instructorId: editingCourse.instructorId,
+                instructorId: courseToInstructors.get(editingCourse.id)?.[0]?.id || null,
                 daysOfWeek: editingCourse.daysOfWeek || "",
                 lectureStartTime: editingCourse.lectureStartTime || "",
                 lectureEndTime: editingCourse.lectureEndTime || "",

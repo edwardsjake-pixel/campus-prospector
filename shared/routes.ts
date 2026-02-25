@@ -1,10 +1,7 @@
 import { z } from 'zod';
-import { instructors, courses, officeHours, visits, visitInteractions, plannedMeetings } from './schema';
+import { instructors, courses, officeHours, visits, visitInteractions, plannedMeetings, departments } from './schema';
 import { createInsertSchema } from 'drizzle-zod';
 
-// ============================================
-// SHARED ERROR SCHEMAS
-// ============================================
 export const errorSchemas = {
   validation: z.object({
     message: z.string(),
@@ -18,28 +15,53 @@ export const errorSchemas = {
   }),
 };
 
-// ============================================
-// API CONTRACT
-// ============================================
 export const api = {
+  institutions: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/institutions' as const,
+      responses: {
+        200: z.array(z.any()),
+      },
+    },
+  },
+  departments: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/departments' as const,
+      responses: {
+        200: z.array(z.any()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/departments' as const,
+      input: createInsertSchema(departments).omit({ id: true }),
+      responses: {
+        201: z.any(),
+        400: errorSchemas.validation,
+      },
+    },
+  },
   instructors: {
     list: {
       method: 'GET' as const,
       path: '/api/instructors' as const,
       input: z.object({
-        department: z.string().optional(),
+        departmentId: z.coerce.number().optional(),
+        institutionId: z.coerce.number().optional(),
         targetPriority: z.string().optional(),
         search: z.string().optional(),
       }).optional(),
       responses: {
-        200: z.array(z.custom<typeof instructors.$inferSelect>()),
+        200: z.array(z.any()),
       },
     },
     get: {
       method: 'GET' as const,
       path: '/api/instructors/:id' as const,
       responses: {
-        200: z.custom<typeof instructors.$inferSelect>(),
+        200: z.any(),
         404: errorSchemas.notFound,
       },
     },
@@ -48,7 +70,7 @@ export const api = {
       path: '/api/instructors' as const,
       input: createInsertSchema(instructors).omit({ id: true, createdAt: true }),
       responses: {
-        201: z.custom<typeof instructors.$inferSelect>(),
+        201: z.any(),
         400: errorSchemas.validation,
       },
     },
@@ -57,7 +79,7 @@ export const api = {
       path: '/api/instructors/:id' as const,
       input: createInsertSchema(instructors).omit({ id: true, createdAt: true }).partial(),
       responses: {
-        200: z.custom<typeof instructors.$inferSelect>(),
+        200: z.any(),
         404: errorSchemas.notFound,
       },
     },
@@ -70,7 +92,7 @@ export const api = {
         instructorId: z.coerce.number().optional(),
       }).optional(),
       responses: {
-        200: z.array(z.custom<typeof courses.$inferSelect>()),
+        200: z.array(z.any()),
       },
     },
     create: {
@@ -78,7 +100,29 @@ export const api = {
       path: '/api/courses' as const,
       input: createInsertSchema(courses).omit({ id: true }),
       responses: {
-        201: z.custom<typeof courses.$inferSelect>(),
+        201: z.any(),
+        400: errorSchemas.validation,
+      },
+    },
+  },
+  courseInstructors: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/course-instructors' as const,
+      responses: {
+        200: z.array(z.any()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/course-instructors' as const,
+      input: z.object({
+        courseId: z.number(),
+        instructorId: z.number(),
+        role: z.string().optional(),
+      }),
+      responses: {
+        201: z.any(),
         400: errorSchemas.validation,
       },
     },
@@ -91,7 +135,7 @@ export const api = {
         instructorId: z.coerce.number().optional(),
       }).optional(),
       responses: {
-        200: z.array(z.custom<typeof officeHours.$inferSelect>()),
+        200: z.array(z.any()),
       },
     },
     create: {
@@ -99,7 +143,7 @@ export const api = {
       path: '/api/office-hours' as const,
       input: createInsertSchema(officeHours).omit({ id: true }),
       responses: {
-        201: z.custom<typeof officeHours.$inferSelect>(),
+        201: z.any(),
         400: errorSchemas.validation,
       },
     },
@@ -109,7 +153,7 @@ export const api = {
       method: 'GET' as const,
       path: '/api/visits' as const,
       responses: {
-        200: z.array(z.custom<typeof visits.$inferSelect>()),
+        200: z.array(z.any()),
       },
     },
     create: {
@@ -117,7 +161,7 @@ export const api = {
       path: '/api/visits' as const,
       input: createInsertSchema(visits).omit({ id: true, createdAt: true, userId: true }),
       responses: {
-        201: z.custom<typeof visits.$inferSelect>(),
+        201: z.any(),
         400: errorSchemas.validation,
       },
     },
@@ -128,7 +172,7 @@ export const api = {
       path: '/api/interactions' as const,
       input: createInsertSchema(visitInteractions).omit({ id: true }),
       responses: {
-        201: z.custom<typeof visitInteractions.$inferSelect>(),
+        201: z.any(),
         400: errorSchemas.validation,
       },
     },
@@ -138,7 +182,7 @@ export const api = {
       method: 'GET' as const,
       path: '/api/planned-meetings' as const,
       responses: {
-        200: z.array(z.custom<typeof plannedMeetings.$inferSelect>()),
+        200: z.array(z.any()),
       },
     },
     create: {
@@ -146,7 +190,7 @@ export const api = {
       path: '/api/planned-meetings' as const,
       input: createInsertSchema(plannedMeetings).omit({ id: true, createdAt: true, userId: true }),
       responses: {
-        201: z.custom<typeof plannedMeetings.$inferSelect>(),
+        201: z.any(),
         400: errorSchemas.validation,
       },
     },
@@ -155,7 +199,7 @@ export const api = {
       path: '/api/planned-meetings/:id' as const,
       input: createInsertSchema(plannedMeetings).omit({ id: true, createdAt: true, userId: true }).partial(),
       responses: {
-        200: z.custom<typeof plannedMeetings.$inferSelect>(),
+        200: z.any(),
         404: errorSchemas.notFound,
       },
     },
@@ -197,9 +241,6 @@ export const api = {
   },
 };
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
 export function buildUrl(path: string, params?: Record<string, string | number>): string {
   let url = path;
   if (params) {
@@ -212,9 +253,6 @@ export function buildUrl(path: string, params?: Record<string, string | number>)
   return url;
 }
 
-// ============================================
-// TYPE HELPERS
-// ============================================
 export type InstructorInput = z.infer<typeof api.instructors.create.input>;
 export type CourseInput = z.infer<typeof api.courses.create.input>;
 export type OfficeHourInput = z.infer<typeof api.officeHours.create.input>;
