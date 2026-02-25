@@ -814,7 +814,7 @@ export default function Instructors() {
     if (!scrapeInstitutionSearch) return allInstitutions.data;
     const q = scrapeInstitutionSearch.toLowerCase();
     return allInstitutions.data.filter(i =>
-      i.name.toLowerCase().includes(q) || i.domain.toLowerCase().includes(q) || i.state.toLowerCase().includes(q)
+      i.name.toLowerCase().includes(q) || (i.domain || "").toLowerCase().includes(q) || (i.state || "").toLowerCase().includes(q)
     );
   }, [allInstitutions.data, scrapeInstitutionSearch]);
 
