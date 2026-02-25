@@ -38,6 +38,7 @@ import { eq, like, or, and, inArray } from "drizzle-orm";
 export interface IStorage {
   // Institutions
   getInstitutions(filters?: { classification?: string; state?: string; search?: string }): Promise<Institution[]>;
+  getActiveInstitutionNames(): Promise<string[]>;
   seedInstitutions(items: InsertInstitution[]): Promise<number>;
 
   // Departments
@@ -113,6 +114,15 @@ export class DatabaseStorage implements IStorage {
       return db.select().from(institutions).where(and(...conditions));
     }
     return db.select().from(institutions);
+  }
+
+  async getActiveInstitutionNames(): Promise<string[]> {
+    const rows = await db
+      .selectDistinct({ name: institutions.name })
+      .from(institutions)
+      .innerJoin(departments, eq(departments.institutionId, institutions.id))
+      .innerJoin(instructors, eq(instructors.departmentId, departments.id));
+    return rows.map(r => r.name);
   }
 
   async seedInstitutions(items: InsertInstitution[]): Promise<number> {

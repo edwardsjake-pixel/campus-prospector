@@ -406,25 +406,40 @@ interface HubSpotPreviewContact {
 function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
   const { data: dealStageLabels } = useQuery<Record<string, string>>({ queryKey: ["/api/hubspot/deal-stages"] });
-  const [school, setSchool] = useState<string>("both");
+  const [selectedCompanyNames, setSelectedCompanyNames] = useState<string[]>([]);
+  const [institutionSearch, setInstitutionSearch] = useState("");
   const [contacts, setContacts] = useState<HubSpotPreviewContact[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [hasLoaded, setHasLoaded] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [recentOnly, setRecentOnly] = useState(true);
 
+  const allInstitutionsForImport = useQuery<{ id: number; name: string; domain: string; state: string; classification: string }[]>({
+    queryKey: ["/api/institutions"],
+    enabled: open,
+  });
+
+  const filteredImportInstitutions = useMemo(() => {
+    if (!allInstitutionsForImport.data) return [];
+    if (!institutionSearch) return allInstitutionsForImport.data;
+    const q = institutionSearch.toLowerCase();
+    return allInstitutionsForImport.data.filter(i =>
+      i.name.toLowerCase().includes(q) || (i.domain || "").toLowerCase().includes(q) || (i.state || "").toLowerCase().includes(q)
+    );
+  }, [allInstitutionsForImport.data, institutionSearch]);
+
   const fetchContacts = useMutation({
-    mutationFn: async ({ selectedSchool, query, recent }: { selectedSchool: string; query: string; recent: boolean }) => {
+    mutationFn: async ({ companyNames, query, recent }: { companyNames: string[]; query: string; recent: boolean }) => {
       if (query.trim()) {
         const res = await apiRequest("POST", "/api/hubspot/search-contacts", {
-          school: selectedSchool,
+          companyNames: companyNames.length > 0 ? companyNames : undefined,
           query: query.trim(),
           recentOnly: recent,
         });
         return res.json() as Promise<HubSpotPreviewContact[]>;
       } else {
         const res = await apiRequest("POST", "/api/hubspot/import-preview", {
-          school: selectedSchool,
+          companyNames: companyNames.length > 0 ? companyNames : undefined,
           recentOnly: recent,
         });
         return res.json() as Promise<HubSpotPreviewContact[]>;
@@ -468,40 +483,45 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       setHasLoaded(false);
       setSearchInput("");
       setRecentOnly(true);
-      fetchContacts.mutate({ selectedSchool: school, query: "", recent: true });
+      setSelectedCompanyNames([]);
+      setInstitutionSearch("");
+      fetchContacts.mutate({ companyNames: [], query: "", recent: true });
     }
   }, [open]);
 
-  const handleSchoolChange = useCallback((value: string) => {
-    setSchool(value);
+  const reloadContacts = useCallback((names: string[], query: string, recent: boolean) => {
     setContacts([]);
     setSelected(new Set());
     setHasLoaded(false);
-    fetchContacts.mutate({ selectedSchool: value, query: searchInput, recent: recentOnly });
-  }, [searchInput, recentOnly]);
+    fetchContacts.mutate({ companyNames: names, query, recent });
+  }, []);
+
+  const handleAddInstitution = useCallback((name: string) => {
+    const updated = [...selectedCompanyNames, name];
+    setSelectedCompanyNames(updated);
+    setInstitutionSearch("");
+    reloadContacts(updated, searchInput, recentOnly);
+  }, [selectedCompanyNames, searchInput, recentOnly, reloadContacts]);
+
+  const handleRemoveInstitution = useCallback((name: string) => {
+    const updated = selectedCompanyNames.filter(n => n !== name);
+    setSelectedCompanyNames(updated);
+    reloadContacts(updated, searchInput, recentOnly);
+  }, [selectedCompanyNames, searchInput, recentOnly, reloadContacts]);
 
   const handleSearch = useCallback(() => {
-    setContacts([]);
-    setSelected(new Set());
-    setHasLoaded(false);
-    fetchContacts.mutate({ selectedSchool: school, query: searchInput, recent: recentOnly });
-  }, [school, searchInput, recentOnly]);
+    reloadContacts(selectedCompanyNames, searchInput, recentOnly);
+  }, [selectedCompanyNames, searchInput, recentOnly, reloadContacts]);
 
   const handleRecentOnlyChange = useCallback((checked: boolean) => {
     setRecentOnly(checked);
-    setContacts([]);
-    setSelected(new Set());
-    setHasLoaded(false);
-    fetchContacts.mutate({ selectedSchool: school, query: searchInput, recent: checked });
-  }, [school, searchInput]);
+    reloadContacts(selectedCompanyNames, searchInput, checked);
+  }, [selectedCompanyNames, searchInput, reloadContacts]);
 
   const handleClearSearch = useCallback(() => {
     setSearchInput("");
-    setContacts([]);
-    setSelected(new Set());
-    setHasLoaded(false);
-    fetchContacts.mutate({ selectedSchool: school, query: "", recent: recentOnly });
-  }, [school, recentOnly]);
+    reloadContacts(selectedCompanyNames, "", recentOnly);
+  }, [selectedCompanyNames, recentOnly, reloadContacts]);
 
   const selectableContacts = useMemo(() => contacts.filter(c => !c.alreadyImported), [contacts]);
 
@@ -536,17 +556,18 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         <DialogHeader>
           <DialogTitle data-testid="text-import-dialog-title">Import from HubSpot</DialogTitle>
           <DialogDescription>
-            Search by name or email, or filter by school to see contacts with deals.
+            Search by name or email, or filter by institution to see contacts with deals.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1 flex-1 min-w-[200px]">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1">
             <Input
               placeholder="Search by name or email..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="flex-1"
               data-testid="input-hubspot-search"
             />
             <Button
@@ -570,16 +591,55 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               </Button>
             )}
           </div>
-          <Select value={school} onValueChange={handleSchoolChange} data-testid="select-school">
-            <SelectTrigger className="w-[200px]" data-testid="select-school-trigger">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="both" data-testid="select-school-both">Both Schools</SelectItem>
-              <SelectItem value="purdue" data-testid="select-school-purdue">Purdue University</SelectItem>
-              <SelectItem value="iu" data-testid="select-school-iu">IU Bloomington</SelectItem>
-            </SelectContent>
-          </Select>
+          <div>
+            <Label className="text-xs text-muted-foreground">Filter by Institution</Label>
+            {selectedCompanyNames.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1 mb-1">
+                {selectedCompanyNames.map(name => (
+                  <Badge key={name} variant="secondary" className="text-xs gap-1" data-testid={`badge-institution-${name}`}>
+                    {name}
+                    <button onClick={() => handleRemoveInstitution(name)} className="ml-0.5 hover:text-destructive">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={selectedCompanyNames.length > 0 ? "Add another institution..." : "Search institutions (leave empty for all)..."}
+                value={institutionSearch}
+                onChange={(e) => setInstitutionSearch(e.target.value)}
+                className="pl-9 h-9"
+                data-testid="input-hubspot-institution-search"
+              />
+            </div>
+            {institutionSearch && (
+              <div className="max-h-[150px] overflow-y-auto border rounded-md mt-1">
+                {allInstitutionsForImport.isLoading ? (
+                  <div className="p-3 text-sm text-muted-foreground text-center">Loading institutions...</div>
+                ) : filteredImportInstitutions.length === 0 ? (
+                  <div className="p-3 text-sm text-muted-foreground text-center">No matching institutions</div>
+                ) : (
+                  filteredImportInstitutions
+                    .filter(i => !selectedCompanyNames.includes(i.name))
+                    .slice(0, 50)
+                    .map((inst) => (
+                      <button
+                        key={inst.id}
+                        className="w-full text-left px-3 py-1.5 hover:bg-accent text-sm border-b last:border-b-0 transition-colors"
+                        onClick={() => handleAddInstitution(inst.name)}
+                        data-testid={`option-hubspot-institution-${inst.id}`}
+                      >
+                        <span className="font-medium">{inst.name}</span>
+                        <span className="text-muted-foreground ml-2 text-xs">{inst.state} · {inst.classification}</span>
+                      </button>
+                    ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -607,7 +667,7 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               <p className="text-sm">
                 {isSearching
                   ? `No contacts found matching "${searchInput.trim()}".`
-                  : "No contacts with open or won deals found at this school."}
+                  : "No contacts with open or won deals found for the selected institutions."}
               </p>
               <p className="text-xs mt-1">
                 {isSearching
@@ -744,10 +804,17 @@ export default function Instructors() {
   const updateCourse = useUpdateCourse();
   const deleteCourse = useDeleteCourse();
 
+  const activeInstitutions = useQuery<string[]>({
+    queryKey: ["/api/institutions/active"],
+  });
+
   const hubspotSync = useMutation({
     mutationFn: async () => {
+      const names = activeInstitutions.data && activeInstitutions.data.length > 0
+        ? activeInstitutions.data
+        : ["Purdue University", "Indiana University Bloomington", "Indiana University"];
       const res = await apiRequest("POST", "/api/hubspot/sync", {
-        companyNames: ["Purdue University", "Indiana University Bloomington", "Indiana University"],
+        companyNames: names,
       });
       return res.json();
     },

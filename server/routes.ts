@@ -26,6 +26,11 @@ export async function registerRoutes(
     res.json(result);
   });
 
+  app.get("/api/institutions/active", async (_req, res) => {
+    const names = await storage.getActiveInstitutionNames();
+    res.json(names);
+  });
+
   // === Departments ===
   app.get(api.departments.list.path, async (req, res) => {
     const institutionId = req.query.institutionId ? Number(req.query.institutionId) : undefined;
@@ -564,10 +569,8 @@ export async function registerRoutes(
   app.post("/api/hubspot/import-preview", async (req, res) => {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const school = (req.body.school as string) || 'both';
-      if (!['purdue', 'iu', 'both'].includes(school)) {
-        return res.status(400).json({ message: "school must be 'purdue', 'iu', or 'both'" });
-      }
+      const companyNames = req.body.companyNames as string[] | undefined;
+      const school = req.body.school as string | undefined;
       const allInstructors = await storage.getInstructors();
       const existingEmails = new Set(
         allInstructors
@@ -576,7 +579,7 @@ export async function registerRoutes(
       );
       const recentOnly = req.body.recentOnly === true;
       const stageLabels = await fetchDealStageLabels();
-      const preview = await fetchImportPreview(school, existingEmails, stageLabels, recentOnly);
+      const preview = await fetchImportPreview({ companyNames, school }, existingEmails, stageLabels, recentOnly);
       res.json(preview);
     } catch (error: any) {
       console.error("HubSpot import preview error:", error);
@@ -587,13 +590,11 @@ export async function registerRoutes(
   app.post("/api/hubspot/search-contacts", async (req, res) => {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const school = (req.body.school as string) || 'both';
+      const companyNames = req.body.companyNames as string[] | undefined;
+      const school = req.body.school as string | undefined;
       const query = (req.body.query as string) || '';
       if (!query.trim()) {
         return res.status(400).json({ message: "query is required" });
-      }
-      if (!['purdue', 'iu', 'both'].includes(school)) {
-        return res.status(400).json({ message: "school must be 'purdue', 'iu', or 'both'" });
       }
       const allInstructors = await storage.getInstructors();
       const existingEmails = new Set(
@@ -603,7 +604,7 @@ export async function registerRoutes(
       );
       const recentOnly = req.body.recentOnly === true;
       const stageLabels = await fetchDealStageLabels();
-      const results = await searchHubSpotContacts(school, query, existingEmails, stageLabels, recentOnly);
+      const results = await searchHubSpotContacts({ companyNames, school }, query, existingEmails, stageLabels, recentOnly);
       res.json(results);
     } catch (error: any) {
       console.error("HubSpot search contacts error:", error);

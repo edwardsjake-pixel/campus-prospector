@@ -123,12 +123,12 @@ Instructors → Planned Meetings (via instructorId FK)
 ### HubSpot CRM Integration
 - **Service file**: `server/hubspot.ts` — HubSpot API client for syncing contacts and deals
 - **Integration**: Connected via Replit native HubSpot connector (OAuth-based, auto-refreshing tokens)
-- **Sync scope**: Purdue and Indiana University Bloomington companies
+- **Sync scope**: Dynamic — syncs all institutions that have instructors in the database (via `GET /api/institutions/active`). Falls back to Purdue + IU Bloomington if no active institutions.
 - **Contact matching**: By email address — matches HubSpot contacts to existing instructors, creates new instructors for unmatched contacts
 - **Department/Institution handling**: HubSpot company name is used to find or create institution + department via `findOrCreateDepartment()`
 - **Deal import**: Fetches deals associated with matched contacts, stores in `deals` table linked to instructors (and optionally courses via courseId)
-- **API endpoints**: `POST /api/hubspot/sync`, `GET /api/deals`, `GET /api/hubspot/deal-stages`
-- **UI**: "Sync HubSpot" button on Faculty & Courses page, deal pipeline card on Dashboard, deal badges on instructor rows and planner meetings
+- **API endpoints**: `POST /api/hubspot/sync` (accepts `companyNames: string[]`), `POST /api/hubspot/import-preview` (accepts `companyNames` or `school`), `POST /api/hubspot/search-contacts`, `GET /api/deals`, `GET /api/hubspot/deal-stages`, `GET /api/institutions/active`
+- **UI**: "Sync HubSpot" button on Faculty & Courses page (syncs all active institutions), "Import from HubSpot" dialog with searchable multi-institution picker (all 326 R1/R2 universities), deal pipeline card on Dashboard, deal badges on instructor rows and planner meetings
 
 ### Packback Web Scraper (Crawl4AI)
 - **Scraper file**: `server/scraper/packback_scraper.py` — Python script using Crawl4AI to find faculty who use Packback

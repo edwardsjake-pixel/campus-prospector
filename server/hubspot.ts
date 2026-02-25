@@ -65,6 +65,16 @@ const SCHOOL_COMPANY_MAP: Record<string, string[]> = {
   both: ["Purdue University", "Indiana University Bloomington", "Indiana University"],
 };
 
+function resolveCompanyNames(params: { companyNames?: string[]; school?: string }): string[] {
+  if (params.companyNames && params.companyNames.length > 0) {
+    return params.companyNames;
+  }
+  if (params.school && SCHOOL_COMPANY_MAP[params.school]) {
+    return SCHOOL_COMPANY_MAP[params.school];
+  }
+  return SCHOOL_COMPANY_MAP['both'];
+}
+
 export interface HubSpotSyncResult {
   contactsFound: number;
   instructorsCreated: number;
@@ -320,7 +330,7 @@ function filterDealsRecentOnly(deals: HubSpotDeal[], stageLabels: Record<string,
 }
 
 export async function fetchImportPreview(
-  school: string,
+  params: { companyNames?: string[]; school?: string },
   existingEmails: Set<string>,
   stageLabels: Record<string, string>,
   recentOnly: boolean = false,
@@ -328,7 +338,7 @@ export async function fetchImportPreview(
   const client = await getUncachableHubSpotClient();
   const results: HubSpotImportPreviewContact[] = [];
   const seenContactIds = new Set<string>();
-  const companyNames = SCHOOL_COMPANY_MAP[school] || SCHOOL_COMPANY_MAP['both'];
+  const companyNames = resolveCompanyNames(params);
 
   for (const companyName of companyNames) {
     try {
@@ -380,7 +390,7 @@ export async function fetchImportPreview(
 }
 
 export async function searchHubSpotContacts(
-  school: string,
+  params: { companyNames?: string[]; school?: string },
   searchQuery: string,
   existingEmails: Set<string>,
   stageLabels: Record<string, string>,
@@ -389,7 +399,7 @@ export async function searchHubSpotContacts(
   const client = await getUncachableHubSpotClient();
   const results: HubSpotImportPreviewContact[] = [];
   const seenContactIds = new Set<string>();
-  const companyNames = SCHOOL_COMPANY_MAP[school] || SCHOOL_COMPANY_MAP['both'];
+  const companyNames = resolveCompanyNames(params);
 
   for (const companyName of companyNames) {
     try {
