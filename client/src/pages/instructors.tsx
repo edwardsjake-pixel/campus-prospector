@@ -1016,7 +1016,7 @@ export default function Instructors() {
             ) : (
               <Globe className="w-4 h-4 mr-2" />
             )}
-            {packbackScrape.isPending ? "Scraping..." : "Scrape Packback"}
+            {packbackScrape.isPending ? "Scraping..." : "Find Packback Users"}
           </Button>
           <CsvImport type="instructors" />
           <CsvImport type="courses" />
@@ -1519,9 +1519,9 @@ export default function Instructors() {
       <Dialog open={isScrapeOpen} onOpenChange={setIsScrapeOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Scrape Packback Contacts</DialogTitle>
+            <DialogTitle>Find Packback Users</DialogTitle>
             <DialogDescription>
-              Crawl publicly available pages to find faculty who use Packback as their discussion tool. Scraped contacts will be imported as instructors.
+              Crawl university course catalogs and syllabus pages to find instructors who use Packback in their courses. Matched faculty will be imported as instructors.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
@@ -1541,14 +1541,14 @@ export default function Instructors() {
             <div>
               <Label>Custom URLs (optional)</Label>
               <Textarea
-                placeholder={"Add URLs to scrape, one per line.\nLeave empty to use default Packback pages."}
+                placeholder={"Add university URLs to scrape, one per line.\nLeave empty to use default university catalog pages."}
                 value={scrapeUrls}
                 onChange={(e) => setScrapeUrls(e.target.value)}
                 className="mt-1 min-h-[100px] font-mono text-sm"
                 data-testid="input-scrape-urls"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Default: packback.co case studies and resources pages
+                Default: University course catalog and syllabus search pages
               </p>
             </div>
             <div className="flex justify-end gap-2">

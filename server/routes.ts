@@ -574,9 +574,7 @@ export async function registerRoutes(
       if (urls && urls.length > 0) {
         args.push("--urls", ...urls);
       }
-      if (institution && institution !== "all") {
-        args.push("--institution", institution);
-      }
+      args.push("--institution", institution || "all");
 
       const { execFile } = await import("child_process");
       const { promisify } = await import("util");
@@ -621,8 +619,8 @@ export async function registerRoutes(
         email: f.email || null,
         department: f.department || null,
         institution: f.institution || null,
-        bio: f.title || null,
-        notes: f.notes || "Scraped from Packback",
+        bio: f.course ? `Courses: ${f.course}` : null,
+        notes: f.notes || "Uses Packback",
         targetPriority: "medium",
       }));
 

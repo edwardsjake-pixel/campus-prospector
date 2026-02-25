@@ -111,12 +111,12 @@ Preferred communication style: Simple, everyday language.
 ### Packback Web Scraper (Crawl4AI)
 - **Scraper file**: `server/scraper/packback_scraper.py` — Python script using Crawl4AI to find faculty who use Packback
 - **Runtime**: Python 3.11 with crawl4ai pip package and Playwright/Chromium for headless browsing
-- **How it works**: The Node.js backend spawns the Python script via `child_process.execFile`, passes CLI args for URLs and institution filter, and parses the JSON output
-- **Default targets**: Packback.co case studies and resources pages; custom URLs can be provided via the UI
-- **API endpoint**: `POST /api/scrape/packback` — accepts `{ urls?: string[], institution?: string }`, returns `{ created, updated, existing, total_found, urls_scraped }`
-- **Import flow**: Scraped faculty are fed through the existing `bulkCreateInstructors` upsert logic (same as CSV import — fills empty fields, avoids duplicates by name)
-- **Institution filter**: Can filter results by "purdue", "indiana", or "all" (default)
-- **UI**: "Scrape Packback" button on Faculty & Courses page opens a dialog with institution filter and optional custom URLs
+- **How it works**: Uses Google site-search (e.g., `site:purdue.edu packback syllabus`) to discover university pages (syllabi, course pages) that mention Packback. Extracts instructor names and course codes from URL paths (e.g., `~drkelly/KellySyllabusPHIL293SP25.pdf` → Kelly, PHIL 293) and page content. HTML pages are crawled; PDF URLs are parsed from their path structure.
+- **Default targets**: Google site-search for purdue.edu and indiana.edu pages mentioning Packback; custom university URLs can be provided via the UI
+- **API endpoint**: `POST /api/scrape/packback` — accepts `{ urls?: string[], institution?: "purdue"|"indiana"|"all" }`, returns `{ created, updated, existing, total_found, urls_scraped }`
+- **Import flow**: Scraped faculty are fed through the existing `bulkCreateInstructors` upsert logic (same as CSV import — fills empty fields, avoids duplicates by name). Course info stored in bio field.
+- **Institution filter**: Targets "purdue", "indiana", or "all" (default) — controls which university domains are searched
+- **UI**: "Find Packback Users" button on Faculty & Courses page opens a dialog with institution filter and optional custom URLs
 - **Timeout**: 2 minutes max for the scraping subprocess
 
 ### Build Tools
