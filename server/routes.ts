@@ -558,7 +558,9 @@ export async function registerRoutes(
   // === Packback Scraper ===
   const scrapeInputSchema = z.object({
     urls: z.array(z.string().url()).max(10).optional(),
-    institution: z.enum(["all", "purdue", "indiana"]).optional().default("all"),
+    institution: z.string().optional(),
+    domain: z.string().optional(),
+    institutionName: z.string().optional(),
   });
 
   app.post("/api/scrape/packback", async (req, res) => {
@@ -568,13 +570,20 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0].message });
       }
-      const { urls, institution } = parsed.data;
+      const { urls, institution, domain, institutionName } = parsed.data;
 
       const args = ["server/scraper/packback_scraper.py"];
       if (urls && urls.length > 0) {
         args.push("--urls", ...urls);
       }
-      args.push("--institution", institution || "all");
+      if (domain) {
+        args.push("--domain", domain);
+        if (institutionName) {
+          args.push("--institution-name", institutionName);
+        }
+      } else if (institution && institution !== "all") {
+        args.push("--institution", institution);
+      }
 
       const { execFile } = await import("child_process");
       const { promisify } = await import("util");
@@ -641,6 +650,33 @@ export async function registerRoutes(
       res.status(500).json({ message: error.message || "Scraper failed" });
     }
   });
+
+  // === Institutions ===
+  app.get("/api/institutions", async (req, res) => {
+    const { classification, state, search } = req.query;
+    const filters: { classification?: string; state?: string; search?: string } = {};
+    if (classification && typeof classification === "string") filters.classification = classification;
+    if (state && typeof state === "string") filters.state = state;
+    if (search && typeof search === "string") filters.search = search;
+    const result = await storage.getInstitutions(filters);
+    res.json(result);
+  });
+
+  // Seed institutions from JSON data
+  const existingInstitutions = await storage.getInstitutions();
+  if (existingInstitutions.length === 0) {
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const filePath = path.join(process.cwd(), "shared/data/institutions.json");
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const data = JSON.parse(raw);
+      const count = await storage.seedInstitutions(data);
+      console.log(`Seeded ${count} R1/R2 institutions`);
+    } catch (e) {
+      console.error("Failed to seed institutions:", e);
+    }
+  }
 
   // Seed data if empty
   const existingInstructors = await storage.getInstructors();

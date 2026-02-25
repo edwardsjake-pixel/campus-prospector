@@ -1,0 +1,2610 @@
+[
+  {
+    "name": "American University",
+    "city": "Washington",
+    "state": "DC",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "american.edu"
+  },
+  {
+    "name": "Arizona State University",
+    "city": "Tempe",
+    "state": "AZ",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "asu.edu"
+  },
+  {
+    "name": "Auburn University",
+    "city": "Auburn",
+    "state": "AL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "auburn.edu"
+  },
+  {
+    "name": "Baylor College of Medicine",
+    "city": "Houston",
+    "state": "TX",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "bcm.edu"
+  },
+  {
+    "name": "Baylor University",
+    "city": "Waco",
+    "state": "TX",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "baylor.edu"
+  },
+  {
+    "name": "Binghamton University",
+    "city": "Binghamton",
+    "state": "NY",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "binghamton.edu"
+  },
+  {
+    "name": "Boston College",
+    "city": "Chestnut Hill",
+    "state": "MA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "bc.edu"
+  },
+  {
+    "name": "Boston University",
+    "city": "Boston",
+    "state": "MA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "bu.edu"
+  },
+  {
+    "name": "Brandeis University",
+    "city": "Waltham",
+    "state": "MA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "brandeis.edu"
+  },
+  {
+    "name": "Brigham Young University",
+    "city": "Provo",
+    "state": "UT",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "byu.edu"
+  },
+  {
+    "name": "Brown University",
+    "city": "Providence",
+    "state": "RI",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "brown.edu"
+  },
+  {
+    "name": "California Institute of Technology",
+    "city": "Pasadena",
+    "state": "CA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "caltech.edu"
+  },
+  {
+    "name": "Carnegie Mellon University",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "cmu.edu"
+  },
+  {
+    "name": "Case Western Reserve University",
+    "city": "Cleveland",
+    "state": "OH",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "case.edu"
+  },
+  {
+    "name": "Catholic University of America",
+    "city": "Washington",
+    "state": "DC",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "cua.edu"
+  },
+  {
+    "name": "Clemson University",
+    "city": "Clemson",
+    "state": "SC",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "clemson.edu"
+  },
+  {
+    "name": "Colorado School of Mines",
+    "city": "Golden",
+    "state": "CO",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "mines.edu"
+  },
+  {
+    "name": "Colorado State University-Fort Collins",
+    "city": "Fort Collins",
+    "state": "CO",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "colostate.edu"
+  },
+  {
+    "name": "Columbia University in the City of New York",
+    "city": "New York",
+    "state": "NY",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "columbia.edu"
+  },
+  {
+    "name": "Cornell University",
+    "city": "Ithaca",
+    "state": "NY",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "cornell.edu"
+  },
+  {
+    "name": "CUNY Graduate School and University Center",
+    "city": "New York",
+    "state": "NY",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "gc.cuny.edu"
+  },
+  {
+    "name": "Dartmouth College",
+    "city": "Hanover",
+    "state": "NH",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "dartmouth.edu"
+  },
+  {
+    "name": "Drexel University",
+    "city": "Philadelphia",
+    "state": "PA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "drexel.edu"
+  },
+  {
+    "name": "Duke University",
+    "city": "Durham",
+    "state": "NC",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "duke.edu"
+  },
+  {
+    "name": "East Carolina University",
+    "city": "Greenville",
+    "state": "NC",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ecu.edu"
+  },
+  {
+    "name": "Emory University",
+    "city": "Atlanta",
+    "state": "GA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "emory.edu"
+  },
+  {
+    "name": "Florida Atlantic University",
+    "city": "Boca Raton",
+    "state": "FL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "fau.edu"
+  },
+  {
+    "name": "Florida International University",
+    "city": "Miami",
+    "state": "FL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "fiu.edu"
+  },
+  {
+    "name": "Florida State University",
+    "city": "Tallahassee",
+    "state": "FL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "fsu.edu"
+  },
+  {
+    "name": "George Mason University",
+    "city": "Fairfax",
+    "state": "VA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "gmu.edu"
+  },
+  {
+    "name": "George Washington University",
+    "city": "Washington",
+    "state": "DC",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "gwu.edu"
+  },
+  {
+    "name": "Georgetown University",
+    "city": "Washington",
+    "state": "DC",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "georgetown.edu"
+  },
+  {
+    "name": "Georgia Institute of Technology-Main Campus",
+    "city": "Atlanta",
+    "state": "GA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "gatech.edu"
+  },
+  {
+    "name": "Georgia State University",
+    "city": "Atlanta",
+    "state": "GA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "gsu.edu"
+  },
+  {
+    "name": "Harvard University",
+    "city": "Cambridge",
+    "state": "MA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "harvard.edu"
+  },
+  {
+    "name": "Howard University",
+    "city": "Washington",
+    "state": "DC",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "howard.edu"
+  },
+  {
+    "name": "Indiana University Bloomington",
+    "city": "Bloomington",
+    "state": "IN",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "indiana.edu"
+  },
+  {
+    "name": "Indiana University Indianapolis",
+    "city": "Indianapolis",
+    "state": "IN",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "iupui.edu"
+  },
+  {
+    "name": "Iowa State University",
+    "city": "Ames",
+    "state": "IA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "iastate.edu"
+  },
+  {
+    "name": "Johns Hopkins University",
+    "city": "Baltimore",
+    "state": "MD",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "jhu.edu"
+  },
+  {
+    "name": "Kansas State University",
+    "city": "Manhattan",
+    "state": "KS",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "k-state.edu"
+  },
+  {
+    "name": "Kent State University at Kent",
+    "city": "Kent",
+    "state": "OH",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "kent.edu"
+  },
+  {
+    "name": "Lehigh University",
+    "city": "Bethlehem",
+    "state": "PA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "lehigh.edu"
+  },
+  {
+    "name": "Louisiana State University and Agricultural & Mechanical College",
+    "city": "Baton Rouge",
+    "state": "LA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "lsu.edu"
+  },
+  {
+    "name": "Loyola University Chicago",
+    "city": "Chicago",
+    "state": "IL",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "luc.edu"
+  },
+  {
+    "name": "Massachusetts Institute of Technology",
+    "city": "Cambridge",
+    "state": "MA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "mit.edu"
+  },
+  {
+    "name": "Medical University of South Carolina",
+    "city": "Charleston",
+    "state": "SC",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "musc.edu"
+  },
+  {
+    "name": "Michigan State University",
+    "city": "East Lansing",
+    "state": "MI",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "msu.edu"
+  },
+  {
+    "name": "Michigan Technological University",
+    "city": "Houghton",
+    "state": "MI",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "mtu.edu"
+  },
+  {
+    "name": "Mississippi State University",
+    "city": "Mississippi State",
+    "state": "MS",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "msstate.edu"
+  },
+  {
+    "name": "Missouri University of Science and Technology",
+    "city": "Rolla",
+    "state": "MO",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "mst.edu"
+  },
+  {
+    "name": "Montana State University",
+    "city": "Bozeman",
+    "state": "MT",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "montana.edu"
+  },
+  {
+    "name": "New Jersey Institute of Technology",
+    "city": "Newark",
+    "state": "NJ",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "njit.edu"
+  },
+  {
+    "name": "New Mexico State University-Main Campus",
+    "city": "Las Cruces",
+    "state": "NM",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "nmsu.edu"
+  },
+  {
+    "name": "New York University",
+    "city": "New York",
+    "state": "NY",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "nyu.edu"
+  },
+  {
+    "name": "North Carolina State University at Raleigh",
+    "city": "Raleigh",
+    "state": "NC",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ncsu.edu"
+  },
+  {
+    "name": "North Dakota State University-Main Campus",
+    "city": "Fargo",
+    "state": "ND",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ndsu.edu"
+  },
+  {
+    "name": "Northeastern University",
+    "city": "Boston",
+    "state": "MA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "northeastern.edu"
+  },
+  {
+    "name": "Northern Arizona University",
+    "city": "Flagstaff",
+    "state": "AZ",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "nau.edu"
+  },
+  {
+    "name": "Northwestern University",
+    "city": "Evanston",
+    "state": "IL",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "northwestern.edu"
+  },
+  {
+    "name": "Nova Southeastern University",
+    "city": "Fort Lauderdale",
+    "state": "FL",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "nova.edu"
+  },
+  {
+    "name": "Ohio State University-Main Campus",
+    "city": "Columbus",
+    "state": "OH",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "osu.edu"
+  },
+  {
+    "name": "Ohio University-Main Campus",
+    "city": "Athens",
+    "state": "OH",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ohio.edu"
+  },
+  {
+    "name": "Oklahoma State University",
+    "city": "Stillwater",
+    "state": "OK",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "okstate.edu"
+  },
+  {
+    "name": "Old Dominion University",
+    "city": "Norfolk",
+    "state": "VA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "odu.edu"
+  },
+  {
+    "name": "Oregon State University",
+    "city": "Corvallis",
+    "state": "OR",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "oregonstate.edu"
+  },
+  {
+    "name": "Princeton University",
+    "city": "Princeton",
+    "state": "NJ",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "princeton.edu"
+  },
+  {
+    "name": "Purdue University",
+    "city": "West Lafayette",
+    "state": "IN",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "purdue.edu"
+  },
+  {
+    "name": "Rensselaer Polytechnic Institute",
+    "city": "Troy",
+    "state": "NY",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "rpi.edu"
+  },
+  {
+    "name": "Rice University",
+    "city": "Houston",
+    "state": "TX",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "rice.edu"
+  },
+  {
+    "name": "Rutgers University-New Brunswick",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "rutgers.edu"
+  },
+  {
+    "name": "Saint Louis University",
+    "city": "St. Louis",
+    "state": "MO",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "slu.edu"
+  },
+  {
+    "name": "San Diego State University",
+    "city": "San Diego",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "sdsu.edu"
+  },
+  {
+    "name": "Southern Illinois University-Carbondale",
+    "city": "Carbondale",
+    "state": "IL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "siu.edu"
+  },
+  {
+    "name": "Southern Methodist University",
+    "city": "Dallas",
+    "state": "TX",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "smu.edu"
+  },
+  {
+    "name": "Stanford University",
+    "city": "Stanford",
+    "state": "CA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "stanford.edu"
+  },
+  {
+    "name": "Stony Brook University",
+    "city": "Stony Brook",
+    "state": "NY",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "stonybrook.edu"
+  },
+  {
+    "name": "Syracuse University",
+    "city": "Syracuse",
+    "state": "NY",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "syracuse.edu"
+  },
+  {
+    "name": "Temple University",
+    "city": "Philadelphia",
+    "state": "PA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "temple.edu"
+  },
+  {
+    "name": "Texas A & M University-College Station",
+    "city": "College Station",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "tamu.edu"
+  },
+  {
+    "name": "Texas Tech University",
+    "city": "Lubbock",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ttu.edu"
+  },
+  {
+    "name": "The Pennsylvania State University",
+    "city": "University Park",
+    "state": "PA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "psu.edu"
+  },
+  {
+    "name": "The University of Alabama",
+    "city": "Tuscaloosa",
+    "state": "AL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ua.edu"
+  },
+  {
+    "name": "The University of Montana",
+    "city": "Missoula",
+    "state": "MT",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "umt.edu"
+  },
+  {
+    "name": "The University of Tennessee Health Science Center",
+    "city": "Memphis",
+    "state": "TN",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uthsc.edu"
+  },
+  {
+    "name": "The University of Tennessee-Knoxville",
+    "city": "Knoxville",
+    "state": "TN",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "utk.edu"
+  },
+  {
+    "name": "The University of Texas at Arlington",
+    "city": "Arlington",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uta.edu"
+  },
+  {
+    "name": "The University of Texas at Austin",
+    "city": "Austin",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "utexas.edu"
+  },
+  {
+    "name": "The University of Texas at Dallas",
+    "city": "Richardson",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "utdallas.edu"
+  },
+  {
+    "name": "The University of Texas at El Paso",
+    "city": "El Paso",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "utep.edu"
+  },
+  {
+    "name": "The University of Texas at San Antonio",
+    "city": "San Antonio",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "utsa.edu"
+  },
+  {
+    "name": "The University of Texas Health Science Center at Houston",
+    "city": "Houston",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uth.edu"
+  },
+  {
+    "name": "The University of Texas Health Science Center at San Antonio",
+    "city": "San Antonio",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uthscsa.edu"
+  },
+  {
+    "name": "Tufts University",
+    "city": "Medford",
+    "state": "MA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "tufts.edu"
+  },
+  {
+    "name": "Tulane University of Louisiana",
+    "city": "New Orleans",
+    "state": "LA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "tulane.edu"
+  },
+  {
+    "name": "University at Albany",
+    "city": "Albany",
+    "state": "NY",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "albany.edu"
+  },
+  {
+    "name": "University at Buffalo",
+    "city": "Buffalo",
+    "state": "NY",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "buffalo.edu"
+  },
+  {
+    "name": "University of Alabama at Birmingham",
+    "city": "Birmingham",
+    "state": "AL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uab.edu"
+  },
+  {
+    "name": "University of Arizona",
+    "city": "Tucson",
+    "state": "AZ",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "arizona.edu"
+  },
+  {
+    "name": "University of Arkansas",
+    "city": "Fayetteville",
+    "state": "AR",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uark.edu"
+  },
+  {
+    "name": "University of California, Berkeley",
+    "city": "Berkeley",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "berkeley.edu"
+  },
+  {
+    "name": "University of California, Davis",
+    "city": "Davis",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ucdavis.edu"
+  },
+  {
+    "name": "University of California, Irvine",
+    "city": "Irvine",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uci.edu"
+  },
+  {
+    "name": "University of California, Los Angeles",
+    "city": "Los Angeles",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ucla.edu"
+  },
+  {
+    "name": "University of California, Merced",
+    "city": "Merced",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ucmerced.edu"
+  },
+  {
+    "name": "University of California, Riverside",
+    "city": "Riverside",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ucr.edu"
+  },
+  {
+    "name": "University of California, San Diego",
+    "city": "La Jolla",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ucsd.edu"
+  },
+  {
+    "name": "University of California, San Francisco",
+    "city": "San Francisco",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ucsf.edu"
+  },
+  {
+    "name": "University of California, Santa Barbara",
+    "city": "Santa Barbara",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ucsb.edu"
+  },
+  {
+    "name": "University of California, Santa Cruz",
+    "city": "Santa Cruz",
+    "state": "CA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ucsc.edu"
+  },
+  {
+    "name": "University of Central Florida",
+    "city": "Orlando",
+    "state": "FL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ucf.edu"
+  },
+  {
+    "name": "University of Chicago",
+    "city": "Chicago",
+    "state": "IL",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "uchicago.edu"
+  },
+  {
+    "name": "University of Cincinnati",
+    "city": "Cincinnati",
+    "state": "OH",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uc.edu"
+  },
+  {
+    "name": "University of Colorado Boulder",
+    "city": "Boulder",
+    "state": "CO",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "colorado.edu"
+  },
+  {
+    "name": "University of Colorado Denver/Anschutz Medical Campus",
+    "city": "Denver",
+    "state": "CO",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ucdenver.edu"
+  },
+  {
+    "name": "University of Connecticut",
+    "city": "Storrs",
+    "state": "CT",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uconn.edu"
+  },
+  {
+    "name": "University of Dayton",
+    "city": "Dayton",
+    "state": "OH",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "udayton.edu"
+  },
+  {
+    "name": "University of Delaware",
+    "city": "Newark",
+    "state": "DE",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "udel.edu"
+  },
+  {
+    "name": "University of Denver",
+    "city": "Denver",
+    "state": "CO",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "du.edu"
+  },
+  {
+    "name": "University of Florida",
+    "city": "Gainesville",
+    "state": "FL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ufl.edu"
+  },
+  {
+    "name": "University of Georgia",
+    "city": "Athens",
+    "state": "GA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uga.edu"
+  },
+  {
+    "name": "University of Hawaii at Manoa",
+    "city": "Honolulu",
+    "state": "HI",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "hawaii.edu"
+  },
+  {
+    "name": "University of Houston",
+    "city": "Houston",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uh.edu"
+  },
+  {
+    "name": "University of Idaho",
+    "city": "Moscow",
+    "state": "ID",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uidaho.edu"
+  },
+  {
+    "name": "University of Illinois Chicago",
+    "city": "Chicago",
+    "state": "IL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uic.edu"
+  },
+  {
+    "name": "University of Illinois Urbana-Champaign",
+    "city": "Champaign",
+    "state": "IL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "illinois.edu"
+  },
+  {
+    "name": "University of Iowa",
+    "city": "Iowa City",
+    "state": "IA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uiowa.edu"
+  },
+  {
+    "name": "University of Kansas",
+    "city": "Lawrence",
+    "state": "KS",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ku.edu"
+  },
+  {
+    "name": "University of Kentucky",
+    "city": "Lexington",
+    "state": "KY",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uky.edu"
+  },
+  {
+    "name": "University of Louisiana at Lafayette",
+    "city": "Lafayette",
+    "state": "LA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "louisiana.edu"
+  },
+  {
+    "name": "University of Louisville",
+    "city": "Louisville",
+    "state": "KY",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "louisville.edu"
+  },
+  {
+    "name": "University of Maine",
+    "city": "Orono",
+    "state": "ME",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "umaine.edu"
+  },
+  {
+    "name": "University of Maryland-Baltimore County",
+    "city": "Catonsville",
+    "state": "MD",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "umbc.edu"
+  },
+  {
+    "name": "University of Maryland-College Park",
+    "city": "College Park",
+    "state": "MD",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "umd.edu"
+  },
+  {
+    "name": "University of Maryland, Baltimore",
+    "city": "Baltimore",
+    "state": "MD",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "umaryland.edu"
+  },
+  {
+    "name": "University of Massachusetts-Amherst",
+    "city": "Amherst",
+    "state": "MA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "umass.edu"
+  },
+  {
+    "name": "University of Massachusetts-Boston",
+    "city": "Boston",
+    "state": "MA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "umb.edu"
+  },
+  {
+    "name": "University of Massachusetts-Lowell",
+    "city": "Lowell",
+    "state": "MA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uml.edu"
+  },
+  {
+    "name": "University of Memphis",
+    "city": "Memphis",
+    "state": "TN",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "memphis.edu"
+  },
+  {
+    "name": "University of Miami",
+    "city": "Coral Gables",
+    "state": "FL",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "miami.edu"
+  },
+  {
+    "name": "University of Michigan-Ann Arbor",
+    "city": "Ann Arbor",
+    "state": "MI",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "umich.edu"
+  },
+  {
+    "name": "University of Minnesota-Twin Cities",
+    "city": "Minneapolis",
+    "state": "MN",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "umn.edu"
+  },
+  {
+    "name": "University of Mississippi",
+    "city": "University",
+    "state": "MS",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "olemiss.edu"
+  },
+  {
+    "name": "University of Missouri-Columbia",
+    "city": "Columbia",
+    "state": "MO",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "missouri.edu"
+  },
+  {
+    "name": "University of Missouri-Kansas City",
+    "city": "Kansas City",
+    "state": "MO",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "umkc.edu"
+  },
+  {
+    "name": "University of Nebraska Medical Center",
+    "city": "Omaha",
+    "state": "NE",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "unmc.edu"
+  },
+  {
+    "name": "University of Nebraska-Lincoln",
+    "city": "Lincoln",
+    "state": "NE",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "unl.edu"
+  },
+  {
+    "name": "University of Nevada-Las Vegas",
+    "city": "Las Vegas",
+    "state": "NV",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "unlv.edu"
+  },
+  {
+    "name": "University of Nevada-Reno",
+    "city": "Reno",
+    "state": "NV",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "unr.edu"
+  },
+  {
+    "name": "University of New Hampshire-Main Campus",
+    "city": "Durham",
+    "state": "NH",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "unh.edu"
+  },
+  {
+    "name": "University of New Mexico-Main Campus",
+    "city": "Albuquerque",
+    "state": "NM",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "unm.edu"
+  },
+  {
+    "name": "University of North Carolina at Chapel Hill",
+    "city": "Chapel Hill",
+    "state": "NC",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "unc.edu"
+  },
+  {
+    "name": "University of North Carolina at Charlotte",
+    "city": "Charlotte",
+    "state": "NC",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "charlotte.edu"
+  },
+  {
+    "name": "University of North Dakota",
+    "city": "Grand Forks",
+    "state": "ND",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "und.edu"
+  },
+  {
+    "name": "University of North Texas",
+    "city": "Denton",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "unt.edu"
+  },
+  {
+    "name": "University of Notre Dame",
+    "city": "Notre Dame",
+    "state": "IN",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "nd.edu"
+  },
+  {
+    "name": "University of Oklahoma-Norman Campus",
+    "city": "Norman",
+    "state": "OK",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "ou.edu"
+  },
+  {
+    "name": "University of Oregon",
+    "city": "Eugene",
+    "state": "OR",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uoregon.edu"
+  },
+  {
+    "name": "University of Pennsylvania",
+    "city": "Philadelphia",
+    "state": "PA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "upenn.edu"
+  },
+  {
+    "name": "University of Pittsburgh-Pittsburgh Campus",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "pitt.edu"
+  },
+  {
+    "name": "University of Rhode Island",
+    "city": "Kingston",
+    "state": "RI",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uri.edu"
+  },
+  {
+    "name": "University of Rochester",
+    "city": "Rochester",
+    "state": "NY",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "rochester.edu"
+  },
+  {
+    "name": "University of South Carolina-Columbia",
+    "city": "Columbia",
+    "state": "SC",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "sc.edu"
+  },
+  {
+    "name": "University of South Florida",
+    "city": "Tampa",
+    "state": "FL",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "usf.edu"
+  },
+  {
+    "name": "University of Southern California",
+    "city": "Los Angeles",
+    "state": "CA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "usc.edu"
+  },
+  {
+    "name": "University of Southern Mississippi",
+    "city": "Hattiesburg",
+    "state": "MS",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "usm.edu"
+  },
+  {
+    "name": "University of Texas Southwestern Medical Center",
+    "city": "Dallas",
+    "state": "TX",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "utsouthwestern.edu"
+  },
+  {
+    "name": "University of Toledo",
+    "city": "Toledo",
+    "state": "OH",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "utoledo.edu"
+  },
+  {
+    "name": "University of Utah",
+    "city": "Salt Lake City",
+    "state": "UT",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "utah.edu"
+  },
+  {
+    "name": "University of Vermont",
+    "city": "Burlington",
+    "state": "VT",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uvm.edu"
+  },
+  {
+    "name": "University of Virginia-Main Campus",
+    "city": "Charlottesville",
+    "state": "VA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "virginia.edu"
+  },
+  {
+    "name": "University of Washington-Seattle Campus",
+    "city": "Seattle",
+    "state": "WA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "washington.edu"
+  },
+  {
+    "name": "University of Wisconsin-Madison",
+    "city": "Madison",
+    "state": "WI",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "wisc.edu"
+  },
+  {
+    "name": "University of Wisconsin-Milwaukee",
+    "city": "Milwaukee",
+    "state": "WI",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uwm.edu"
+  },
+  {
+    "name": "University of Wyoming",
+    "city": "Laramie",
+    "state": "WY",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "uwyo.edu"
+  },
+  {
+    "name": "Utah State University",
+    "city": "Logan",
+    "state": "UT",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "usu.edu"
+  },
+  {
+    "name": "Vanderbilt University",
+    "city": "Nashville",
+    "state": "TN",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "vanderbilt.edu"
+  },
+  {
+    "name": "Virginia Commonwealth University",
+    "city": "Richmond",
+    "state": "VA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "vcu.edu"
+  },
+  {
+    "name": "Virginia Polytechnic Institute and State University",
+    "city": "Blacksburg",
+    "state": "VA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "vt.edu"
+  },
+  {
+    "name": "Washington State University",
+    "city": "Pullman",
+    "state": "WA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "wsu.edu"
+  },
+  {
+    "name": "Washington University in St Louis",
+    "city": "St. Louis",
+    "state": "MO",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "wustl.edu"
+  },
+  {
+    "name": "Wayne State University",
+    "city": "Detroit",
+    "state": "MI",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "wayne.edu"
+  },
+  {
+    "name": "Weill Cornell Medicine",
+    "city": "New York",
+    "state": "NY",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "weill.cornell.edu"
+  },
+  {
+    "name": "West Virginia University",
+    "city": "Morgantown",
+    "state": "WV",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "wvu.edu"
+  },
+  {
+    "name": "William & Mary",
+    "city": "Williamsburg",
+    "state": "VA",
+    "control": "Public",
+    "classification": "R1",
+    "domain": "wm.edu"
+  },
+  {
+    "name": "Worcester Polytechnic Institute",
+    "city": "Worcester",
+    "state": "MA",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "wpi.edu"
+  },
+  {
+    "name": "Yale University",
+    "city": "New Haven",
+    "state": "CT",
+    "control": "Private",
+    "classification": "R1",
+    "domain": "yale.edu"
+  },
+  {
+    "name": "Abilene Christian University",
+    "control": "Private",
+    "city": "Abilene",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "acu.edu"
+  },
+  {
+    "name": "Air Force Institute of Technology Graduate School of Engineering & Management",
+    "control": "Public",
+    "city": "Wright-Patterson AFB",
+    "state": "OH",
+    "classification": "R2",
+    "domain": "afit.edu"
+  },
+  {
+    "name": "Albert Einstein College of Medicine",
+    "control": "Private",
+    "city": "Bronx",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "einsteinmed.edu"
+  },
+  {
+    "name": "Appalachian State University",
+    "control": "Public",
+    "city": "Boone",
+    "state": "NC",
+    "classification": "R2",
+    "domain": "appstate.edu"
+  },
+  {
+    "name": "Arkansas State University",
+    "control": "Public",
+    "city": "Jonesboro",
+    "state": "AR",
+    "classification": "R2",
+    "domain": "astate.edu"
+  },
+  {
+    "name": "Augusta University",
+    "control": "Public",
+    "city": "Augusta",
+    "state": "GA",
+    "classification": "R2",
+    "domain": "augusta.edu"
+  },
+  {
+    "name": "Azusa Pacific University",
+    "control": "Private",
+    "city": "Azusa",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "apu.edu"
+  },
+  {
+    "name": "Ball State University",
+    "control": "Public",
+    "city": "Muncie",
+    "state": "IN",
+    "classification": "R2",
+    "domain": "bsu.edu"
+  },
+  {
+    "name": "Boise State University",
+    "control": "Public",
+    "city": "Boise",
+    "state": "ID",
+    "classification": "R2",
+    "domain": "boisestate.edu"
+  },
+  {
+    "name": "Bowling Green State University",
+    "control": "Public",
+    "city": "Bowling Green",
+    "state": "OH",
+    "classification": "R2",
+    "domain": "bgsu.edu"
+  },
+  {
+    "name": "California State Polytechnic University, Pomona",
+    "control": "Public",
+    "city": "Pomona",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "cpp.edu"
+  },
+  {
+    "name": "California State University, Fresno",
+    "control": "Public",
+    "city": "Fresno",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "csufresno.edu"
+  },
+  {
+    "name": "California State University, Fullerton",
+    "control": "Public",
+    "city": "Fullerton",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "fullerton.edu"
+  },
+  {
+    "name": "California State University, Long Beach",
+    "control": "Public",
+    "city": "Long Beach",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "csulb.edu"
+  },
+  {
+    "name": "California State University, Los Angeles",
+    "control": "Public",
+    "city": "Los Angeles",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "calstatela.edu"
+  },
+  {
+    "name": "California State University, Sacramento",
+    "control": "Public",
+    "city": "Sacramento",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "csus.edu"
+  },
+  {
+    "name": "Central Michigan University",
+    "control": "Public",
+    "city": "Mount Pleasant",
+    "state": "MI",
+    "classification": "R2",
+    "domain": "cmich.edu"
+  },
+  {
+    "name": "Chapman University",
+    "control": "Private",
+    "city": "Orange",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "chapman.edu"
+  },
+  {
+    "name": "Claremont Graduate University",
+    "control": "Private",
+    "city": "Claremont",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "cgu.edu"
+  },
+  {
+    "name": "Clark Atlanta University",
+    "control": "Private",
+    "city": "Atlanta",
+    "state": "GA",
+    "classification": "R2",
+    "domain": "cau.edu"
+  },
+  {
+    "name": "Clark University",
+    "control": "Private",
+    "city": "Worcester",
+    "state": "MA",
+    "classification": "R2",
+    "domain": "clarku.edu"
+  },
+  {
+    "name": "Clarkson University",
+    "control": "Private",
+    "city": "Potsdam",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "clarkson.edu"
+  },
+  {
+    "name": "Cleveland State University",
+    "control": "Public",
+    "city": "Cleveland",
+    "state": "OH",
+    "classification": "R2",
+    "domain": "csuohio.edu"
+  },
+  {
+    "name": "Creighton University",
+    "control": "Private",
+    "city": "Omaha",
+    "state": "NE",
+    "classification": "R2",
+    "domain": "creighton.edu"
+  },
+  {
+    "name": "CUNY City College",
+    "control": "Public",
+    "city": "New York",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "ccny.cuny.edu"
+  },
+  {
+    "name": "CUNY Hunter College",
+    "control": "Public",
+    "city": "New York",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "hunter.cuny.edu"
+  },
+  {
+    "name": "Delaware State University",
+    "control": "Public",
+    "city": "Dover",
+    "state": "DE",
+    "classification": "R2",
+    "domain": "desu.edu"
+  },
+  {
+    "name": "DePaul University",
+    "control": "Private",
+    "city": "Chicago",
+    "state": "IL",
+    "classification": "R2",
+    "domain": "depaul.edu"
+  },
+  {
+    "name": "Duquesne University",
+    "control": "Private",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "classification": "R2",
+    "domain": "duq.edu"
+  },
+  {
+    "name": "East Tennessee State University",
+    "control": "Public",
+    "city": "Johnson City",
+    "state": "TN",
+    "classification": "R2",
+    "domain": "etsu.edu"
+  },
+  {
+    "name": "East Texas A&M University",
+    "control": "Public",
+    "city": "Commerce",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "tamuc.edu"
+  },
+  {
+    "name": "Eastern Michigan University",
+    "control": "Public",
+    "city": "Ypsilanti",
+    "state": "MI",
+    "classification": "R2",
+    "domain": "emich.edu"
+  },
+  {
+    "name": "Eastern Virginia Medical School",
+    "control": "Public",
+    "city": "Norfolk",
+    "state": "VA",
+    "classification": "R2",
+    "domain": "odu.edu"
+  },
+  {
+    "name": "Embry-Riddle Aeronautical University-Daytona Beach",
+    "control": "Private",
+    "city": "Daytona Beach",
+    "state": "FL",
+    "classification": "R2",
+    "domain": "erau.edu"
+  },
+  {
+    "name": "Florida Agricultural and Mechanical University",
+    "control": "Public",
+    "city": "Tallahassee",
+    "state": "FL",
+    "classification": "R2",
+    "domain": "famu.edu"
+  },
+  {
+    "name": "Florida Institute of Technology",
+    "control": "Private",
+    "city": "Melbourne",
+    "state": "FL",
+    "classification": "R2",
+    "domain": "fit.edu"
+  },
+  {
+    "name": "Fordham University",
+    "control": "Private",
+    "city": "Bronx",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "fordham.edu"
+  },
+  {
+    "name": "Georgia Southern University",
+    "control": "Public",
+    "city": "Statesboro",
+    "state": "GA",
+    "classification": "R2",
+    "domain": "georgiasouthern.edu"
+  },
+  {
+    "name": "Hampton University",
+    "control": "Private",
+    "city": "Hampton",
+    "state": "VA",
+    "classification": "R2",
+    "domain": "hamptonu.edu"
+  },
+  {
+    "name": "Hofstra University",
+    "control": "Private",
+    "city": "Hempstead",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "hofstra.edu"
+  },
+  {
+    "name": "Icahn School of Medicine at Mount Sinai",
+    "control": "Private",
+    "city": "New York",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "mssm.edu"
+  },
+  {
+    "name": "Idaho State University",
+    "control": "Public",
+    "city": "Pocatello",
+    "state": "ID",
+    "classification": "R2",
+    "domain": "isu.edu"
+  },
+  {
+    "name": "Illinois Institute of Technology",
+    "control": "Private",
+    "city": "Chicago",
+    "state": "IL",
+    "classification": "R2",
+    "domain": "iit.edu"
+  },
+  {
+    "name": "Illinois State University",
+    "control": "Public",
+    "city": "Normal",
+    "state": "IL",
+    "classification": "R2",
+    "domain": "ilstu.edu"
+  },
+  {
+    "name": "Indiana University of Pennsylvania",
+    "control": "Public",
+    "city": "Indiana",
+    "state": "PA",
+    "classification": "R2",
+    "domain": "iup.edu"
+  },
+  {
+    "name": "Jackson State University",
+    "control": "Public",
+    "city": "Jackson",
+    "state": "MS",
+    "classification": "R2",
+    "domain": "jsums.edu"
+  },
+  {
+    "name": "James Madison University",
+    "control": "Public",
+    "city": "Harrisonburg",
+    "state": "VA",
+    "classification": "R2",
+    "domain": "jmu.edu"
+  },
+  {
+    "name": "Kean University",
+    "control": "Public",
+    "city": "Union",
+    "state": "NJ",
+    "classification": "R2",
+    "domain": "kean.edu"
+  },
+  {
+    "name": "Kennesaw State University",
+    "control": "Public",
+    "city": "Kennesaw",
+    "state": "GA",
+    "classification": "R2",
+    "domain": "kennesaw.edu"
+  },
+  {
+    "name": "Lamar University",
+    "control": "Public",
+    "city": "Beaumont",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "lamar.edu"
+  },
+  {
+    "name": "Loma Linda University",
+    "control": "Private",
+    "city": "Loma Linda",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "llu.edu"
+  },
+  {
+    "name": "Long Island University",
+    "control": "Private",
+    "city": "Brookville",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "liu.edu"
+  },
+  {
+    "name": "Louisiana State University Health Sciences Center, New Orleans",
+    "control": "Public",
+    "city": "New Orleans",
+    "state": "LA",
+    "classification": "R2",
+    "domain": "lsuhsc.edu"
+  },
+  {
+    "name": "Louisiana Tech University",
+    "control": "Public",
+    "city": "Ruston",
+    "state": "LA",
+    "classification": "R2",
+    "domain": "latech.edu"
+  },
+  {
+    "name": "Loyola Marymount University",
+    "control": "Private",
+    "city": "Los Angeles",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "lmu.edu"
+  },
+  {
+    "name": "Marquette University",
+    "control": "Private",
+    "city": "Milwaukee",
+    "state": "WI",
+    "classification": "R2",
+    "domain": "marquette.edu"
+  },
+  {
+    "name": "Marshall University",
+    "control": "Public",
+    "city": "Huntington",
+    "state": "WV",
+    "classification": "R2",
+    "domain": "marshall.edu"
+  },
+  {
+    "name": "Medical College of Wisconsin",
+    "control": "Private",
+    "city": "Milwaukee",
+    "state": "WI",
+    "classification": "R2",
+    "domain": "mcw.edu"
+  },
+  {
+    "name": "Mercer University",
+    "control": "Private",
+    "city": "Macon",
+    "state": "GA",
+    "classification": "R2",
+    "domain": "mercer.edu"
+  },
+  {
+    "name": "Miami University, Oxford",
+    "control": "Public",
+    "city": "Oxford",
+    "state": "OH",
+    "classification": "R2",
+    "domain": "miamioh.edu"
+  },
+  {
+    "name": "Middle Tennessee State University",
+    "control": "Public",
+    "city": "Murfreesboro",
+    "state": "TN",
+    "classification": "R2",
+    "domain": "mtsu.edu"
+  },
+  {
+    "name": "Montclair State University",
+    "control": "Public",
+    "city": "Montclair",
+    "state": "NJ",
+    "classification": "R2",
+    "domain": "montclair.edu"
+  },
+  {
+    "name": "Morgan State University",
+    "control": "Public",
+    "city": "Baltimore",
+    "state": "MD",
+    "classification": "R2",
+    "domain": "morgan.edu"
+  },
+  {
+    "name": "North Carolina A&T State University",
+    "control": "Public",
+    "city": "Greensboro",
+    "state": "NC",
+    "classification": "R2",
+    "domain": "ncat.edu"
+  },
+  {
+    "name": "Northern Illinois University",
+    "control": "Public",
+    "city": "DeKalb",
+    "state": "IL",
+    "classification": "R2",
+    "domain": "niu.edu"
+  },
+  {
+    "name": "Oakland University",
+    "control": "Public",
+    "city": "Rochester",
+    "state": "MI",
+    "classification": "R2",
+    "domain": "oakland.edu"
+  },
+  {
+    "name": "Oklahoma State University Center for Health Sciences",
+    "control": "Public",
+    "city": "Tulsa",
+    "state": "OK",
+    "classification": "R2",
+    "domain": "okstate.edu"
+  },
+  {
+    "name": "Oregon Health & Science University",
+    "control": "Public",
+    "city": "Portland",
+    "state": "OR",
+    "classification": "R2",
+    "domain": "ohsu.edu"
+  },
+  {
+    "name": "Pepperdine University",
+    "control": "Private",
+    "city": "Malibu",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "pepperdine.edu"
+  },
+  {
+    "name": "Portland State University",
+    "control": "Public",
+    "city": "Portland",
+    "state": "OR",
+    "classification": "R2",
+    "domain": "pdx.edu"
+  },
+  {
+    "name": "Prairie View A&M University",
+    "control": "Public",
+    "city": "Prairie View",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "pvamu.edu"
+  },
+  {
+    "name": "Rochester Institute of Technology",
+    "control": "Private",
+    "city": "Rochester",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "rit.edu"
+  },
+  {
+    "name": "Rockefeller University",
+    "control": "Private",
+    "city": "New York",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "rockefeller.edu"
+  },
+  {
+    "name": "Rowan University",
+    "control": "Public",
+    "city": "Glassboro",
+    "state": "NJ",
+    "classification": "R2",
+    "domain": "rowan.edu"
+  },
+  {
+    "name": "Rush University",
+    "control": "Private",
+    "city": "Chicago",
+    "state": "IL",
+    "classification": "R2",
+    "domain": "rush.edu"
+  },
+  {
+    "name": "Rutgers University\u2013Camden",
+    "control": "Public",
+    "city": "Camden",
+    "state": "NJ",
+    "classification": "R2",
+    "domain": "camden.rutgers.edu"
+  },
+  {
+    "name": "Rutgers University\u2013Newark",
+    "control": "Public",
+    "city": "Newark",
+    "state": "NJ",
+    "classification": "R2",
+    "domain": "newark.rutgers.edu"
+  },
+  {
+    "name": "Saint Joseph's University",
+    "control": "Private",
+    "city": "Philadelphia",
+    "state": "PA",
+    "classification": "R2",
+    "domain": "sju.edu"
+  },
+  {
+    "name": "Sam Houston State University",
+    "control": "Public",
+    "city": "Huntsville",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "shsu.edu"
+  },
+  {
+    "name": "San Francisco State University",
+    "control": "Public",
+    "city": "San Francisco",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "sfsu.edu"
+  },
+  {
+    "name": "San Jose State University",
+    "control": "Public",
+    "city": "San Jose",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "sjsu.edu"
+  },
+  {
+    "name": "Seton Hall University",
+    "control": "Private",
+    "city": "South Orange",
+    "state": "NJ",
+    "classification": "R2",
+    "domain": "shu.edu"
+  },
+  {
+    "name": "South Carolina State University",
+    "control": "Public",
+    "city": "Orangeburg",
+    "state": "SC",
+    "classification": "R2",
+    "domain": "scsu.edu"
+  },
+  {
+    "name": "South Dakota State University",
+    "control": "Public",
+    "city": "Brookings",
+    "state": "SD",
+    "classification": "R2",
+    "domain": "sdstate.edu"
+  },
+  {
+    "name": "Southern Connecticut State University",
+    "control": "Public",
+    "city": "New Haven",
+    "state": "CT",
+    "classification": "R2",
+    "domain": "southernct.edu"
+  },
+  {
+    "name": "Southern University",
+    "control": "Public",
+    "city": "Baton Rouge",
+    "state": "LA",
+    "classification": "R2",
+    "domain": "subr.edu"
+  },
+  {
+    "name": "Stevens Institute of Technology",
+    "control": "Private",
+    "city": "Hoboken",
+    "state": "NJ",
+    "classification": "R2",
+    "domain": "stevens.edu"
+  },
+  {
+    "name": "SUNY College of Environmental Science and Forestry",
+    "control": "Public",
+    "city": "Syracuse",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "esf.edu"
+  },
+  {
+    "name": "Tarleton State University",
+    "control": "Public",
+    "city": "Stephenville",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "tarleton.edu"
+  },
+  {
+    "name": "Teachers College, Columbia University",
+    "control": "Private",
+    "city": "New York",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "tc.columbia.edu"
+  },
+  {
+    "name": "Tennessee State University",
+    "control": "Public",
+    "city": "Nashville",
+    "state": "TN",
+    "classification": "R2",
+    "domain": "tnstate.edu"
+  },
+  {
+    "name": "Tennessee Technological University",
+    "control": "Public",
+    "city": "Cookeville",
+    "state": "TN",
+    "classification": "R2",
+    "domain": "tntech.edu"
+  },
+  {
+    "name": "Texas A&M University\u2013Corpus Christi",
+    "control": "Public",
+    "city": "Corpus Christi",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "tamucc.edu"
+  },
+  {
+    "name": "Texas A&M University\u2013Kingsville",
+    "control": "Public",
+    "city": "Kingsville",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "tamuk.edu"
+  },
+  {
+    "name": "Texas Christian University",
+    "control": "Private",
+    "city": "Fort Worth",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "tcu.edu"
+  },
+  {
+    "name": "Texas Southern University",
+    "control": "Public",
+    "city": "Houston",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "tsu.edu"
+  },
+  {
+    "name": "Texas State University",
+    "control": "Public",
+    "city": "San Marcos",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "txstate.edu"
+  },
+  {
+    "name": "Texas Tech University Health Sciences Center",
+    "control": "Public",
+    "city": "Lubbock",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "ttuhsc.edu"
+  },
+  {
+    "name": "Texas Woman's University",
+    "control": "Public",
+    "city": "Denton",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "twu.edu"
+  },
+  {
+    "name": "The New School",
+    "control": "Private",
+    "city": "New York",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "newschool.edu"
+  },
+  {
+    "name": "The University of Texas at Tyler",
+    "control": "Public",
+    "city": "Tyler",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "uttyler.edu"
+  },
+  {
+    "name": "The University of Texas Medical Branch at Galveston",
+    "control": "Public",
+    "city": "Galveston",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "utmb.edu"
+  },
+  {
+    "name": "The University of Texas Rio Grande Valley",
+    "control": "Public",
+    "city": "Edinburg",
+    "state": "TX",
+    "classification": "R2",
+    "domain": "utrgv.edu"
+  },
+  {
+    "name": "The University of West Florida",
+    "control": "Public",
+    "city": "Pensacola",
+    "state": "FL",
+    "classification": "R2",
+    "domain": "uwf.edu"
+  },
+  {
+    "name": "Thomas Jefferson University",
+    "control": "Private",
+    "city": "Philadelphia",
+    "state": "PA",
+    "classification": "R2",
+    "domain": "jefferson.edu"
+  },
+  {
+    "name": "University of Akron Main Campus",
+    "control": "Public",
+    "city": "Akron",
+    "state": "OH",
+    "classification": "R2",
+    "domain": "uakron.edu"
+  },
+  {
+    "name": "University of Alabama, Huntsville",
+    "control": "Public",
+    "city": "Huntsville",
+    "state": "AL",
+    "classification": "R2",
+    "domain": "uah.edu"
+  },
+  {
+    "name": "University of Alaska Fairbanks",
+    "control": "Public",
+    "city": "Fairbanks",
+    "state": "AK",
+    "classification": "R2",
+    "domain": "uaf.edu"
+  },
+  {
+    "name": "University of Arkansas at Little Rock",
+    "control": "Public",
+    "city": "Little Rock",
+    "state": "AR",
+    "classification": "R2",
+    "domain": "ualr.edu"
+  },
+  {
+    "name": "University of Arkansas for Medical Sciences",
+    "control": "Public",
+    "city": "Little Rock",
+    "state": "AR",
+    "classification": "R2",
+    "domain": "uams.edu"
+  },
+  {
+    "name": "University of Colorado Colorado Springs",
+    "control": "Public",
+    "city": "Colorado Springs",
+    "state": "CO",
+    "classification": "R2",
+    "domain": "uccs.edu"
+  },
+  {
+    "name": "University of Massachusetts Chan Medical School",
+    "control": "Public",
+    "city": "Worcester",
+    "state": "MA",
+    "classification": "R2",
+    "domain": "umassmed.edu"
+  },
+  {
+    "name": "University of Massachusetts Dartmouth",
+    "control": "Public",
+    "city": "North Dartmouth",
+    "state": "MA",
+    "classification": "R2",
+    "domain": "umassd.edu"
+  },
+  {
+    "name": "University of Michigan-Dearborn",
+    "control": "Public",
+    "city": "Dearborn",
+    "state": "MI",
+    "classification": "R2",
+    "domain": "umd.umich.edu"
+  },
+  {
+    "name": "University of Missouri\u2013St. Louis",
+    "control": "Public",
+    "city": "St. Louis",
+    "state": "MO",
+    "classification": "R2",
+    "domain": "umsl.edu"
+  },
+  {
+    "name": "University of Nebraska Omaha",
+    "control": "Public",
+    "city": "Omaha",
+    "state": "NE",
+    "classification": "R2",
+    "domain": "unomaha.edu"
+  },
+  {
+    "name": "University of New England",
+    "control": "Private",
+    "city": "Biddeford",
+    "state": "ME",
+    "classification": "R2",
+    "domain": "une.edu"
+  },
+  {
+    "name": "University of New Orleans",
+    "control": "Public",
+    "city": "New Orleans",
+    "state": "LA",
+    "classification": "R2",
+    "domain": "uno.edu"
+  },
+  {
+    "name": "University of North Carolina at Greensboro",
+    "control": "Public",
+    "city": "Greensboro",
+    "state": "NC",
+    "classification": "R2",
+    "domain": "uncg.edu"
+  },
+  {
+    "name": "University of North Carolina Wilmington",
+    "control": "Public",
+    "city": "Wilmington",
+    "state": "NC",
+    "classification": "R2",
+    "domain": "uncw.edu"
+  },
+  {
+    "name": "University of North Florida",
+    "control": "Public",
+    "city": "Jacksonville",
+    "state": "FL",
+    "classification": "R2",
+    "domain": "unf.edu"
+  },
+  {
+    "name": "University of Northern Colorado",
+    "control": "Public",
+    "city": "Greeley",
+    "state": "CO",
+    "classification": "R2",
+    "domain": "unco.edu"
+  },
+  {
+    "name": "University of Oklahoma-Health Sciences Center",
+    "control": "Public",
+    "city": "Oklahoma City",
+    "state": "OK",
+    "classification": "R2",
+    "domain": "ouhsc.edu"
+  },
+  {
+    "name": "University of Puerto Rico, Mayaguez",
+    "control": "Public",
+    "city": "Mayaguez",
+    "state": "PR",
+    "classification": "R2",
+    "domain": "uprm.edu"
+  },
+  {
+    "name": "University of Puerto Rico, Rio Piedras",
+    "control": "Public",
+    "city": "San Juan",
+    "state": "PR",
+    "classification": "R2",
+    "domain": "uprrp.edu"
+  },
+  {
+    "name": "University of San Diego",
+    "control": "Private",
+    "city": "San Diego",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "sandiego.edu"
+  },
+  {
+    "name": "University of San Francisco",
+    "control": "Private",
+    "city": "San Francisco",
+    "state": "CA",
+    "classification": "R2",
+    "domain": "usfca.edu"
+  },
+  {
+    "name": "University of South Alabama",
+    "control": "Public",
+    "city": "Mobile",
+    "state": "AL",
+    "classification": "R2",
+    "domain": "southalabama.edu"
+  },
+  {
+    "name": "University of South Dakota",
+    "control": "Public",
+    "city": "Vermillion",
+    "state": "SD",
+    "classification": "R2",
+    "domain": "usd.edu"
+  },
+  {
+    "name": "University of Tulsa",
+    "control": "Private",
+    "city": "Tulsa",
+    "state": "OK",
+    "classification": "R2",
+    "domain": "utulsa.edu"
+  },
+  {
+    "name": "Upstate Medical University",
+    "control": "Public",
+    "city": "Syracuse",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "upstate.edu"
+  },
+  {
+    "name": "Villanova University",
+    "control": "Private",
+    "city": "Villanova",
+    "state": "PA",
+    "classification": "R2",
+    "domain": "villanova.edu"
+  },
+  {
+    "name": "Virginia State University",
+    "control": "Public",
+    "city": "Petersburg",
+    "state": "VA",
+    "classification": "R2",
+    "domain": "vsu.edu"
+  },
+  {
+    "name": "Wake Forest University",
+    "control": "Private",
+    "city": "Winston-Salem",
+    "state": "NC",
+    "classification": "R2",
+    "domain": "wfu.edu"
+  },
+  {
+    "name": "West Chester University of Pennsylvania",
+    "control": "Public",
+    "city": "West Chester",
+    "state": "PA",
+    "classification": "R2",
+    "domain": "wcupa.edu"
+  },
+  {
+    "name": "Western Michigan University",
+    "control": "Public",
+    "city": "Kalamazoo",
+    "state": "MI",
+    "classification": "R2",
+    "domain": "wmich.edu"
+  },
+  {
+    "name": "Wichita State University",
+    "control": "Public",
+    "city": "Wichita",
+    "state": "KS",
+    "classification": "R2",
+    "domain": "wichita.edu"
+  },
+  {
+    "name": "Wright State University",
+    "control": "Public",
+    "city": "Dayton",
+    "state": "OH",
+    "classification": "R2",
+    "domain": "wright.edu"
+  },
+  {
+    "name": "Yeshiva University",
+    "control": "Private",
+    "city": "New York",
+    "state": "NY",
+    "classification": "R2",
+    "domain": "yu.edu"
+  }
+]

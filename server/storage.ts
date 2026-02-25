@@ -1,4 +1,5 @@
 import {
+  institutions,
   instructors,
   courses,
   officeHours,
@@ -6,6 +7,8 @@ import {
   visitInteractions,
   plannedMeetings,
   deals,
+  type Institution,
+  type InsertInstitution,
   type Instructor,
   type InsertInstructor,
   type InstructorWithDetails,
@@ -26,6 +29,10 @@ import { db } from "./db";
 import { eq, like, or, and } from "drizzle-orm";
 
 export interface IStorage {
+  // Institutions
+  getInstitutions(filters?: { classification?: string; state?: string; search?: string }): Promise<Institution[]>;
+  seedInstitutions(items: InsertInstitution[]): Promise<number>;
+
   // Instructors
   getInstructors(filters?: { department?: string; institution?: string; targetPriority?: string; search?: string }): Promise<InstructorWithDetails[]>;
   getInstructor(id: number): Promise<Instructor | undefined>;
@@ -72,6 +79,37 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Institutions
+  async getInstitutions(filters?: { classification?: string; state?: string; search?: string }): Promise<Institution[]> {
+    const conditions = [];
+    if (filters?.classification) {
+      conditions.push(eq(institutions.classification, filters.classification));
+    }
+    if (filters?.state) {
+      conditions.push(eq(institutions.state, filters.state));
+    }
+    if (filters?.search) {
+      conditions.push(like(institutions.name, `%${filters.search}%`));
+    }
+    if (conditions.length > 0) {
+      return db.select().from(institutions).where(and(...conditions));
+    }
+    return db.select().from(institutions);
+  }
+
+  async seedInstitutions(items: InsertInstitution[]): Promise<number> {
+    let count = 0;
+    for (const item of items) {
+      try {
+        await db.insert(institutions).values(item).onConflictDoNothing();
+        count++;
+      } catch {
+        // skip duplicates
+      }
+    }
+    return count;
+  }
+
   // Instructors
   async getInstructors(filters?: { department?: string; institution?: string; targetPriority?: string; search?: string }): Promise<InstructorWithDetails[]> {
     let query = db.select().from(instructors);

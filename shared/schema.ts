@@ -6,6 +6,16 @@ export * from "./models/auth";
 
 // === TABLE DEFINITIONS ===
 
+export const institutions = pgTable("institutions", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  city: text("city"),
+  state: text("state"),
+  control: text("control"),
+  classification: text("classification"),
+  domain: text("domain"),
+});
+
 export const instructors = pgTable("instructors", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
@@ -144,6 +154,7 @@ export const dealsRelations = relations(deals, ({ one }) => ({
 
 // === BASE SCHEMAS ===
 
+export const insertInstitutionSchema = createInsertSchema(institutions).omit({ id: true });
 export const insertInstructorSchema = createInsertSchema(instructors).omit({ id: true, createdAt: true });
 export const insertCourseSchema = createInsertSchema(courses).omit({ id: true });
 export const insertOfficeHourSchema = createInsertSchema(officeHours).omit({ id: true });
@@ -154,6 +165,8 @@ export const insertDealSchema = createInsertSchema(deals).omit({ id: true, lastS
 
 // === EXPLICIT API CONTRACT TYPES ===
 
+export type Institution = typeof institutions.$inferSelect;
+export type InsertInstitution = z.infer<typeof insertInstitutionSchema>;
 export type Instructor = typeof instructors.$inferSelect;
 export type InsertInstructor = z.infer<typeof insertInstructorSchema>;
 export type Course = typeof courses.$inferSelect;

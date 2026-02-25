@@ -7,7 +7,7 @@ and departments from both search result snippets and crawled pages.
 Outputs JSON to stdout for consumption by the Node.js backend.
 
 Usage:
-    python3 server/scraper/packback_scraper.py [--urls URL1 URL2 ...] [--institution purdue|indiana|all]
+    python3 server/scraper/packback_scraper.py [--urls URL1 URL2 ...] [--domain purdue.edu] [--institution-name "Purdue University"]
 """
 
 import asyncio
@@ -26,23 +26,6 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
-GOOGLE_SEARCH_QUERIES = {
-    "purdue": [
-        "site:purdue.edu packback syllabus",
-        "site:purdue.edu packback course",
-    ],
-    "indiana": [
-        "site:indiana.edu packback syllabus",
-        "site:indiana.edu packback course",
-    ],
-}
-
-INSTITUTION_DOMAINS = {
-    "purdue.edu": "Purdue University",
-    "indiana.edu": "Indiana University Bloomington",
-    "iu.edu": "Indiana University Bloomington",
-}
-
 
 class PackbackScraper:
     """Scrapes university websites to find faculty whose courses use Packback."""
@@ -50,12 +33,43 @@ class PackbackScraper:
     def __init__(
         self,
         urls: Optional[list[str]] = None,
-        institution: str = "all",
+        domain: Optional[str] = None,
+        institution_name: Optional[str] = None,
         request_delay: float = 1.5,
     ):
         self.custom_urls = urls or []
-        self.institution = institution
+        self.domain = domain
+        self.institution_name = institution_name or ""
         self.request_delay = request_delay
+
+    def _get_search_queries(self) -> list[str]:
+        if self.domain:
+            return [
+                f"site:{self.domain} packback syllabus",
+                f"site:{self.domain} packback course",
+            ]
+        return [
+            "site:purdue.edu packback syllabus",
+            "site:purdue.edu packback course",
+            "site:indiana.edu packback syllabus",
+            "site:indiana.edu packback course",
+        ]
+
+    def _detect_institution_from_url(self, url: str) -> str:
+        if not url:
+            return self.institution_name or ""
+        url_lower = url.lower()
+        if self.domain and self.domain in url_lower:
+            return self.institution_name or self.domain
+        known = {
+            "purdue.edu": "Purdue University",
+            "indiana.edu": "Indiana University Bloomington",
+            "iu.edu": "Indiana University Bloomington",
+        }
+        for d, name in known.items():
+            if d in url_lower:
+                return name
+        return self.institution_name or ""
 
     async def scrape(self) -> dict:
         browser_config = BrowserConfig(
@@ -112,13 +126,7 @@ class PackbackScraper:
         }
 
     async def _search_and_extract(self, crawler) -> tuple[list[dict], list[str]]:
-        """Search Google and extract faculty from both search snippets and URLs."""
-        queries = []
-        if self.institution == "all":
-            for inst_queries in GOOGLE_SEARCH_QUERIES.values():
-                queries.extend(inst_queries)
-        else:
-            queries = GOOGLE_SEARCH_QUERIES.get(self.institution, [])
+        queries = self._get_search_queries()
 
         all_faculty = []
         all_urls = []
@@ -158,7 +166,6 @@ class PackbackScraper:
         return all_faculty, list(dict.fromkeys(all_urls))
 
     def _extract_from_search_results(self, markdown: str, links: list[str]) -> list[dict]:
-        """Extract faculty info from Google search result snippets."""
         faculty = []
 
         result_blocks = re.split(r'\n###\s', markdown)
@@ -174,7 +181,8 @@ class PackbackScraper:
                     break
 
             if not block_url:
-                url_match = re.search(r'https?://[^\s\)\]"\']+(?:purdue|indiana|iu)\.edu[^\s\)\]"\']*', block)
+                url_pattern = r'https?://[^\s\)\]"\']+\.edu[^\s\)\]"\']*'
+                url_match = re.search(url_pattern, block)
                 if url_match:
                     block_url = url_match.group(0).rstrip('.,;:').split('#')[0]
 
@@ -208,7 +216,6 @@ class PackbackScraper:
         return faculty
 
     def _extract_from_url_path(self, url: str) -> list[dict]:
-        """Extract instructor and course info from URL path structure."""
         if not url:
             return []
 
@@ -278,9 +285,12 @@ class PackbackScraper:
         return faculty
 
     def _extract_university_links(self, markdown: str) -> list[str]:
-        """Extract university domain links from Google search results."""
         links = []
-        uni_domains = list(INSTITUTION_DOMAINS.keys())
+        target_domains = []
+        if self.domain:
+            target_domains.append(self.domain)
+        else:
+            target_domains.extend(["purdue.edu", "indiana.edu", "iu.edu"])
 
         all_urls = re.findall(r'https?://[^\s\)\]"\']+', markdown)
         for url in all_urls:
@@ -291,14 +301,13 @@ class PackbackScraper:
             if 'google' in parsed.netloc:
                 continue
 
-            if any(domain in url for domain in uni_domains):
+            if any(domain in url for domain in target_domains):
                 if url not in links:
                     links.append(url)
 
         return links
 
     def _is_worth_crawling(self, url: str) -> bool:
-        """Check if a URL is worth crawling (not a root domain, has specific path)."""
         parsed = urlparse(url)
         path = parsed.path.rstrip('/')
         if not path or path == '/':
@@ -310,7 +319,6 @@ class PackbackScraper:
         return True
 
     async def _scrape_html_page(self, crawler, url: str) -> list[dict]:
-        """Scrape a single HTML page for instructor/course info."""
         run_config = CrawlerRunConfig(
             wait_for="css:body",
             js_code=[
@@ -353,7 +361,6 @@ class PackbackScraper:
         return faculty
 
     def _extract_instructor_names(self, text: str) -> list[str]:
-        """Extract instructor names from text using multiple patterns."""
         names = []
         seen = set()
 
@@ -405,7 +412,6 @@ class PackbackScraper:
         return True
 
     def _extract_courses(self, text: str) -> list[str]:
-        """Extract course codes like 'PHIL 293', 'CLCS 380', etc."""
         pattern = re.compile(r'\b([A-Z]{2,5})\s*(\d{3,5}[A-Z]?)\b')
         courses = []
         seen = set()
@@ -433,15 +439,6 @@ class PackbackScraper:
         )
         match = dept_pattern.search(text)
         return match.group(0).strip() if match else ""
-
-    def _detect_institution_from_url(self, url: str) -> str:
-        if not url:
-            return ""
-        url_lower = url.lower()
-        for domain, name in INSTITUTION_DOMAINS.items():
-            if domain in url_lower:
-                return name
-        return ""
 
     def _deduplicate(self, contacts: list[dict]) -> list[dict]:
         seen = {}
@@ -492,9 +489,16 @@ async def main():
         help="Custom university URLs to scrape (skips Google search)",
     )
     parser.add_argument(
-        "--institution", type=str, default="all",
-        choices=["purdue", "indiana", "all"],
-        help="Which university to target",
+        "--domain", type=str, default=None,
+        help="University domain to search (e.g. purdue.edu, osu.edu)",
+    )
+    parser.add_argument(
+        "--institution-name", type=str, default=None,
+        help="Full institution name (e.g. 'Purdue University')",
+    )
+    parser.add_argument(
+        "--institution", type=str, default=None,
+        help="Legacy shorthand: purdue, indiana, or all",
     )
     parser.add_argument(
         "--delay", type=float, default=1.5,
@@ -502,12 +506,24 @@ async def main():
     )
     args = parser.parse_args()
 
+    domain = args.domain
+    institution_name = args.institution_name
+
+    if not domain and args.institution:
+        legacy_map = {
+            "purdue": ("purdue.edu", "Purdue University"),
+            "indiana": ("indiana.edu", "Indiana University Bloomington"),
+        }
+        if args.institution in legacy_map:
+            domain, institution_name = legacy_map[args.institution]
+
     old_stdout = sys.stdout
     sys.stdout = open(os.devnull, "w")
 
     scraper = PackbackScraper(
         urls=args.urls,
-        institution=args.institution,
+        domain=domain,
+        institution_name=institution_name or "",
         request_delay=args.delay,
     )
 

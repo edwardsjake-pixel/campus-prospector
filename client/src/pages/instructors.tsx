@@ -810,7 +810,23 @@ export default function Instructors() {
 
   const [isScrapeOpen, setIsScrapeOpen] = useState(false);
   const [scrapeUrls, setScrapeUrls] = useState("");
-  const [scrapeInstitution, setScrapeInstitution] = useState("all");
+  const [scrapeSelectedDomain, setScrapeSelectedDomain] = useState("");
+  const [scrapeSelectedName, setScrapeSelectedName] = useState("");
+  const [scrapeInstitutionSearch, setScrapeInstitutionSearch] = useState("");
+
+  const allInstitutions = useQuery<{ id: number; name: string; domain: string; state: string; classification: string }[]>({
+    queryKey: ["/api/institutions"],
+    enabled: isScrapeOpen,
+  });
+
+  const filteredScrapeInstitutions = useMemo(() => {
+    if (!allInstitutions.data) return [];
+    if (!scrapeInstitutionSearch) return allInstitutions.data;
+    const q = scrapeInstitutionSearch.toLowerCase();
+    return allInstitutions.data.filter(i =>
+      i.name.toLowerCase().includes(q) || i.domain.toLowerCase().includes(q) || i.state.toLowerCase().includes(q)
+    );
+  }, [allInstitutions.data, scrapeInstitutionSearch]);
 
   const packbackScrape = useMutation({
     mutationFn: async () => {
@@ -820,7 +836,8 @@ export default function Instructors() {
         .filter((u) => u.length > 0);
       const res = await apiRequest("POST", "/api/scrape/packback", {
         urls: urls.length > 0 ? urls : undefined,
-        institution: scrapeInstitution,
+        domain: scrapeSelectedDomain || undefined,
+        institutionName: scrapeSelectedName || undefined,
       });
       return res.json();
     },
@@ -832,6 +849,8 @@ export default function Instructors() {
       });
       setIsScrapeOpen(false);
       setScrapeUrls("");
+      setScrapeSelectedDomain("");
+      setScrapeSelectedName("");
     },
     onError: (err: any) => {
       toast({
@@ -1521,35 +1540,83 @@ export default function Instructors() {
           <DialogHeader>
             <DialogTitle>Find Packback Users</DialogTitle>
             <DialogDescription>
-              Crawl university course catalogs and syllabus pages to find instructors who use Packback in their courses. Matched faculty will be imported as instructors.
+              Search university websites via Google to find syllabi and course pages that mention Packback. Matched faculty will be imported as instructors.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
-              <Label>Institution Filter</Label>
-              <Select value={scrapeInstitution} onValueChange={setScrapeInstitution}>
-                <SelectTrigger className="mt-1" data-testid="select-scrape-institution">
-                  <SelectValue placeholder="All institutions" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Institutions</SelectItem>
-                  <SelectItem value="purdue">Purdue University</SelectItem>
-                  <SelectItem value="indiana">Indiana University Bloomington</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Target Institution</Label>
+              <div className="mt-1 space-y-2">
+                {scrapeSelectedDomain ? (
+                  <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
+                    <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{scrapeSelectedName}</p>
+                      <p className="text-xs text-muted-foreground">{scrapeSelectedDomain}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={() => { setScrapeSelectedDomain(""); setScrapeSelectedName(""); setScrapeInstitutionSearch(""); }}
+                      data-testid="button-clear-scrape-institution"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search 326 R1/R2 universities..."
+                        value={scrapeInstitutionSearch}
+                        onChange={(e) => setScrapeInstitutionSearch(e.target.value)}
+                        className="pl-9"
+                        data-testid="input-scrape-institution-search"
+                      />
+                    </div>
+                    {scrapeInstitutionSearch && (
+                      <div className="max-h-[200px] overflow-y-auto border rounded-md">
+                        {allInstitutions.isLoading ? (
+                          <div className="p-3 text-sm text-muted-foreground text-center">Loading institutions...</div>
+                        ) : filteredScrapeInstitutions.length === 0 ? (
+                          <div className="p-3 text-sm text-muted-foreground text-center">No matching institutions</div>
+                        ) : (
+                          filteredScrapeInstitutions.slice(0, 50).map((inst) => (
+                            <button
+                              key={inst.id}
+                              className="w-full text-left px-3 py-2 hover:bg-accent text-sm border-b last:border-b-0 transition-colors"
+                              onClick={() => {
+                                setScrapeSelectedDomain(inst.domain);
+                                setScrapeSelectedName(inst.name);
+                                setScrapeInstitutionSearch("");
+                              }}
+                              data-testid={`option-institution-${inst.id}`}
+                            >
+                              <span className="font-medium">{inst.name}</span>
+                              <span className="text-muted-foreground ml-2 text-xs">{inst.domain} · {inst.state} · {inst.classification}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Leave empty to search Purdue + Indiana (default)
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
             <div>
               <Label>Custom URLs (optional)</Label>
               <Textarea
-                placeholder={"Add university URLs to scrape, one per line.\nLeave empty to use default university catalog pages."}
+                placeholder={"Add university URLs to scrape, one per line.\nLeave empty to use Google site-search."}
                 value={scrapeUrls}
                 onChange={(e) => setScrapeUrls(e.target.value)}
-                className="mt-1 min-h-[100px] font-mono text-sm"
+                className="mt-1 min-h-[80px] font-mono text-sm"
                 data-testid="input-scrape-urls"
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Default: University course catalog and syllabus search pages
-              </p>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsScrapeOpen(false)} data-testid="button-cancel-scrape">

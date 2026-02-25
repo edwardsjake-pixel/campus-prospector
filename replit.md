@@ -45,6 +45,7 @@ Preferred communication style: Simple, everyday language.
 - **Schema Push**: `npm run db:push` uses drizzle-kit to push schema changes directly to the database
 
 ### Database Tables
+- `institutions` — R1/R2 Carnegie Classification universities: name, city, state, control (Public/Private), classification (R1/R2), domain (.edu domain); seeded from `shared/data/institutions.json` on startup (326 entries)
 - `instructors` — Name, email, department, institution, office location, bio, notes, target priority
 - `courses` — Code, name, term, format, enrollment, linked to instructor; also stores lecture schedule (daysOfWeek, lectureStartTime, lectureEndTime, building, room)
 - `office_hours` — Day of week, start/end time, location, virtual flag, linked to instructor
@@ -112,11 +113,12 @@ Preferred communication style: Simple, everyday language.
 - **Scraper file**: `server/scraper/packback_scraper.py` — Python script using Crawl4AI to find faculty who use Packback
 - **Runtime**: Python 3.11 with crawl4ai pip package and Playwright/Chromium for headless browsing
 - **How it works**: Uses Google site-search (e.g., `site:purdue.edu packback syllabus`) to discover university pages (syllabi, course pages) that mention Packback. Extracts instructor names and course codes from URL paths (e.g., `~drkelly/KellySyllabusPHIL293SP25.pdf` → Kelly, PHIL 293) and page content. HTML pages are crawled; PDF URLs are parsed from their path structure.
-- **Default targets**: Google site-search for purdue.edu and indiana.edu pages mentioning Packback; custom university URLs can be provided via the UI
-- **API endpoint**: `POST /api/scrape/packback` — accepts `{ urls?: string[], institution?: "purdue"|"indiana"|"all" }`, returns `{ created, updated, existing, total_found, urls_scraped }`
+- **Institution targeting**: Accepts any university domain from the institutions table (326 R1/R2 universities). Default: searches purdue.edu + indiana.edu. CLI: `--domain purdue.edu --institution-name "Purdue University"` or legacy `--institution purdue|indiana`
+- **API endpoint**: `POST /api/scrape/packback` — accepts `{ urls?: string[], domain?: string, institutionName?: string }`, returns `{ created, updated, existing, total_found, urls_scraped }`
+- **Institutions API**: `GET /api/institutions` — returns all 326 R1/R2 universities with filters: `?classification=R1&state=CA&search=stanford`
+- **Institutions data**: `shared/data/institutions.json` — 326 R1/R2 Carnegie Classification universities (187 R1, 139 R2) with name, city, state, control, classification, domain
 - **Import flow**: Scraped faculty are fed through the existing `bulkCreateInstructors` upsert logic (same as CSV import — fills empty fields, avoids duplicates by name). Course info stored in bio field.
-- **Institution filter**: Targets "purdue", "indiana", or "all" (default) — controls which university domains are searched
-- **UI**: "Find Packback Users" button on Faculty & Courses page opens a dialog with institution filter and optional custom URLs
+- **UI**: "Find Packback Users" button on Faculty & Courses page opens a dialog with searchable institution picker (all 326 universities) and optional custom URLs
 - **Timeout**: 2 minutes max for the scraping subprocess
 
 ### Build Tools
