@@ -49,6 +49,7 @@ import { insertCourseSchema } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 
 const formSchema = insertCourseSchema.extend({
   enrollment: z.coerce.number().default(0),
@@ -309,14 +310,14 @@ export default function Courses() {
     return map;
   }, [instructors]);
 
+  const allInstitutions = useQuery<{ id: number; name: string; domain: string; state: string; classification: string }[]>({
+    queryKey: ["/api/institutions"],
+  });
+
   const institutions = useMemo(() => {
-    const insts = new Set<string>();
-    instructors?.forEach(i => {
-      const instName = (i as any).department?.institution?.name;
-      if (instName) insts.add(instName);
-    });
-    return Array.from(insts).sort();
-  }, [instructors]);
+    if (!allInstitutions.data) return [];
+    return allInstitutions.data.map(i => i.name).sort();
+  }, [allInstitutions.data]);
 
   const getCourseInstructorNames = (courseId: number) => {
     const insts = courseToInstructors.get(courseId);

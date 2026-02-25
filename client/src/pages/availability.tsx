@@ -257,23 +257,27 @@ export default function Availability() {
     });
   };
 
+  const allInstitutionsQuery = useQuery<{ id: number; name: string; domain: string; state: string; classification: string }[]>({
+    queryKey: ["/api/institutions"],
+  });
+
+  const allDepartmentsQuery = useQuery<{ id: number; name: string; institutionId: number; institution: any }[]>({
+    queryKey: ["/api/departments"],
+  });
+
   const departments = useMemo(() => {
-    const depts = new Set<string>();
-    rows.forEach(r => {
-      const deptName = (r.instructor as any).department?.name;
-      if (deptName) depts.add(deptName);
-    });
-    return Array.from(depts).sort();
-  }, [rows]);
+    if (!allDepartmentsQuery.data) return [];
+    let depts = allDepartmentsQuery.data;
+    if (institutionFilter !== "all") {
+      depts = depts.filter(d => d.institution?.name === institutionFilter);
+    }
+    return Array.from(new Set(depts.map(d => d.name))).sort();
+  }, [allDepartmentsQuery.data, institutionFilter]);
 
   const institutions = useMemo(() => {
-    const insts = new Set<string>();
-    rows.forEach(r => {
-      const instName = (r.instructor as any).department?.institution?.name;
-      if (instName) insts.add(instName);
-    });
-    return Array.from(insts).sort();
-  }, [rows]);
+    if (!allInstitutionsQuery.data) return [];
+    return allInstitutionsQuery.data.map(i => i.name).sort();
+  }, [allInstitutionsQuery.data]);
 
   const filteredRows = useMemo(() => {
     let filtered = rows;
@@ -320,7 +324,7 @@ export default function Availability() {
                   </SelectContent>
                 </Select>
 
-                <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
+                <Select value={institutionFilter} onValueChange={(val) => { setInstitutionFilter(val); setDepartmentFilter("all"); }}>
                   <SelectTrigger className="w-[200px]" data-testid="select-institution-filter">
                     <Building2 className="w-4 h-4 mr-1 text-muted-foreground" />
                     <SelectValue placeholder="All Institutions" />

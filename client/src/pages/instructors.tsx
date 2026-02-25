@@ -873,7 +873,6 @@ export default function Instructors() {
 
   const allInstitutions = useQuery<{ id: number; name: string; domain: string; state: string; classification: string }[]>({
     queryKey: ["/api/institutions"],
-    enabled: isScrapeOpen,
   });
 
   const filteredScrapeInstitutions = useMemo(() => {
@@ -919,13 +918,9 @@ export default function Instructors() {
   });
 
   const institutions = useMemo(() => {
-    const insts = new Set<string>();
-    instructors?.forEach(i => {
-      const instName = (i as any).department?.institution?.name;
-      if (instName) insts.add(instName);
-    });
-    return Array.from(insts).sort();
-  }, [instructors]);
+    if (!allInstitutions.data) return [];
+    return allInstitutions.data.map(i => i.name).sort();
+  }, [allInstitutions.data]);
 
   const filteredInstructors = useMemo(() => {
     let filtered = instructors || [];
