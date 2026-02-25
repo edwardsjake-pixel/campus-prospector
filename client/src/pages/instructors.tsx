@@ -1550,7 +1550,7 @@ export default function Instructors() {
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0"
-                      onClick={() => { setScrapeSelectedDomain(""); setScrapeSelectedName(""); setScrapeInstitutionSearch(""); }}
+                      onClick={() => { setScrapeSelectedDomain(""); setScrapeSelectedName(""); setScrapeInstitutionSearch(""); setScrapeUrls(""); }}
                       data-testid="button-clear-scrape-institution"
                     >
                       <X className="w-3 h-3" />
@@ -1583,6 +1583,11 @@ export default function Instructors() {
                                 setScrapeSelectedDomain(inst.domain);
                                 setScrapeSelectedName(inst.name);
                                 setScrapeInstitutionSearch("");
+                                if (inst.domain) {
+                                  setScrapeUrls(
+                                    `https://www.google.com/search?q=site:${inst.domain}+packback+syllabus&num=20\nhttps://www.google.com/search?q=site:${inst.domain}+packback+course&num=20`
+                                  );
+                                }
                               }}
                               data-testid={`option-institution-${inst.id}`}
                             >
