@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PACKBACK_URLS = [
     "https://www.packback.co/case-studies",
-    "https://www.packback.co/resources",
 ]
 
 PACKBACK_KEYWORDS = [
@@ -55,18 +54,43 @@ class PackbackScraper:
         browser_config = BrowserConfig(
             headless=True,
             verbose=False,
+            text_mode=True,
         )
 
         all_contacts = []
+        all_urls_scraped = list(self.urls)
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
+            discovered_links = []
             for url in self.urls:
                 try:
-                    contacts = await self._scrape_url(crawler, url)
+                    contacts, sub_links = await self._scrape_url_with_links(
+                        crawler, url
+                    )
                     all_contacts.extend(contacts)
+                    discovered_links.extend(sub_links)
                     await asyncio.sleep(self.request_delay)
                 except Exception as e:
                     logger.error(f"Error scraping {url}: {e}")
+
+            max_sub_pages = 5
+            seen = set(self.urls)
+            followed = 0
+            for link in discovered_links:
+                if followed >= max_sub_pages:
+                    break
+                if link in seen:
+                    continue
+                seen.add(link)
+                try:
+                    logger.info(f"Following sub-page ({followed + 1}/{max_sub_pages}): {link}")
+                    contacts = await self._scrape_url(crawler, link)
+                    all_contacts.extend(contacts)
+                    all_urls_scraped.append(link)
+                    followed += 1
+                    await asyncio.sleep(self.request_delay)
+                except Exception as e:
+                    logger.error(f"Error scraping sub-page {link}: {e}")
 
         all_contacts = self._deduplicate(all_contacts)
 
@@ -76,9 +100,28 @@ class PackbackScraper:
         return {
             "faculty": all_contacts,
             "scraped_at": datetime.now().isoformat(),
-            "urls_scraped": self.urls,
+            "urls_scraped": all_urls_scraped,
             "total_found": len(all_contacts),
         }
+
+    async def _scrape_url_with_links(
+        self, crawler, url: str
+    ) -> tuple[list[dict], list[str]]:
+        """Scrape a URL and also discover case study sub-page links."""
+        contacts = await self._scrape_url(crawler, url)
+
+        run_config = CrawlerRunConfig(wait_for="css:body")
+        result = await crawler.arun(url=url, config=run_config)
+        sub_links = []
+        if result.success:
+            markdown = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
+            found = re.findall(
+                r'https?://(?:www\.)?packback\.co/case-stud(?:ies|y)/[^\s\)\]"\']+',
+                markdown,
+            )
+            sub_links = list(dict.fromkeys(found))
+
+        return contacts, sub_links
 
     async def _scrape_url(self, crawler, url: str) -> list[dict]:
         """Scrape a single URL for Packback-related faculty contacts."""
@@ -119,16 +162,23 @@ class PackbackScraper:
         """Extract faculty contacts from markdown content."""
         contacts = []
 
+        is_packback_page = "packback.co" in source_url.lower()
+        page_has_packback = any(kw in markdown.lower() for kw in PACKBACK_KEYWORDS)
+
         sections = re.split(r'\n(?=#{1,3}\s)', markdown)
 
         for section in sections:
-            has_packback = any(kw in section.lower() for kw in PACKBACK_KEYWORDS)
-            if not has_packback:
+            section_relevant = is_packback_page or page_has_packback or any(
+                kw in section.lower() for kw in PACKBACK_KEYWORDS
+            )
+            if not section_relevant:
                 continue
 
             names_and_titles = self._extract_names_and_titles(section)
             emails = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', section)
             institution = self._extract_institution(section)
+            if not institution:
+                institution = self._extract_institution(markdown)
             department = self._extract_department(section)
 
             for i, (name, title) in enumerate(names_and_titles):
@@ -329,10 +379,14 @@ async def main():
         help="Filter by institution (e.g., 'purdue', 'indiana')",
     )
     parser.add_argument(
-        "--delay", type=float, default=2.0,
+        "--delay", type=float, default=1.0,
         help="Delay between requests in seconds",
     )
     args = parser.parse_args()
+
+    import os
+    old_stdout = sys.stdout
+    sys.stdout = open(os.devnull, "w")
 
     scraper = PackbackScraper(
         urls=args.urls,
@@ -342,6 +396,8 @@ async def main():
 
     results = await scraper.scrape()
 
+    sys.stdout.close()
+    sys.stdout = old_stdout
     print(json.dumps(results, indent=2))
 
 
