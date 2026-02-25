@@ -15,6 +15,7 @@ Preferred communication style: Simple, everyday language.
 ### Directory Structure
 - `client/` — React SPA (Vite-powered)
 - `server/` — Express API server
+- `server/scraper/` — Python-based web scraper (Crawl4AI)
 - `shared/` — Shared schemas, types, and API contract definitions
 - `migrations/` — Drizzle-generated database migrations
 - `script/` — Build scripts
@@ -106,6 +107,17 @@ Preferred communication style: Simple, everyday language.
 - **Deal import**: Fetches deals associated with matched contacts, stores in `deals` table linked to instructors
 - **API endpoints**: `POST /api/hubspot/sync`, `GET /api/deals`, `GET /api/hubspot/deal-stages`
 - **UI**: "Sync HubSpot" button on Faculty & Courses page, deal pipeline card on Dashboard, deal badges on instructor rows and planner meetings
+
+### Packback Web Scraper (Crawl4AI)
+- **Scraper file**: `server/scraper/packback_scraper.py` — Python script using Crawl4AI to find faculty who use Packback
+- **Runtime**: Python 3.11 with crawl4ai pip package and Playwright/Chromium for headless browsing
+- **How it works**: The Node.js backend spawns the Python script via `child_process.execFile`, passes CLI args for URLs and institution filter, and parses the JSON output
+- **Default targets**: Packback.co case studies and resources pages; custom URLs can be provided via the UI
+- **API endpoint**: `POST /api/scrape/packback` — accepts `{ urls?: string[], institution?: string }`, returns `{ created, updated, existing, total_found, urls_scraped }`
+- **Import flow**: Scraped faculty are fed through the existing `bulkCreateInstructors` upsert logic (same as CSV import — fills empty fields, avoids duplicates by name)
+- **Institution filter**: Can filter results by "purdue", "indiana", or "all" (default)
+- **UI**: "Scrape Packback" button on Faculty & Courses page opens a dialog with institution filter and optional custom URLs
+- **Timeout**: 2 minutes max for the scraping subprocess
 
 ### Build Tools
 - **Vite** — Frontend bundler with React plugin and HMR

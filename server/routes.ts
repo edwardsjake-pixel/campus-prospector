@@ -555,6 +555,95 @@ export async function registerRoutes(
     }
   });
 
+  // === Packback Scraper ===
+  const scrapeInputSchema = z.object({
+    urls: z.array(z.string().url()).max(10).optional(),
+    institution: z.enum(["all", "purdue", "indiana"]).optional().default("all"),
+  });
+
+  app.post("/api/scrape/packback", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const parsed = scrapeInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+      const { urls, institution } = parsed.data;
+
+      const args = ["server/scraper/packback_scraper.py"];
+      if (urls && urls.length > 0) {
+        args.push("--urls", ...urls);
+      }
+      if (institution && institution !== "all") {
+        args.push("--institution", institution);
+      }
+
+      const { execFile } = await import("child_process");
+      const { promisify } = await import("util");
+      const execFileAsync = promisify(execFile);
+
+      const { stdout, stderr } = await execFileAsync("python3", args, {
+        timeout: 120000,
+        maxBuffer: 10 * 1024 * 1024,
+        cwd: process.cwd(),
+      });
+
+      if (stderr) {
+        console.log("Scraper logs:", stderr);
+      }
+
+      if (!stdout || !stdout.trim()) {
+        return res.status(500).json({ message: "Scraper returned no output" });
+      }
+
+      let scraperResult: any;
+      try {
+        scraperResult = JSON.parse(stdout);
+      } catch {
+        console.error("Scraper stdout (not JSON):", stdout.substring(0, 500));
+        return res.status(500).json({ message: "Failed to parse scraper output" });
+      }
+
+      const faculty = scraperResult.faculty || [];
+      if (faculty.length === 0) {
+        return res.json({
+          created: 0,
+          updated: 0,
+          existing: 0,
+          total_found: 0,
+          urls_scraped: scraperResult.urls_scraped || [],
+          message: "No contacts found",
+        });
+      }
+
+      const instructorRows = faculty.map((f: any) => ({
+        name: f.name || "",
+        email: f.email || null,
+        department: f.department || null,
+        institution: f.institution || null,
+        bio: f.title || null,
+        notes: f.notes || "Scraped from Packback",
+        targetPriority: "medium",
+      }));
+
+      const result = await storage.bulkCreateInstructors(instructorRows);
+
+      res.json({
+        created: result.created.length,
+        updated: result.updated.length,
+        existing: result.skippedCount || 0,
+        total_found: faculty.length,
+        urls_scraped: scraperResult.urls_scraped || [],
+      });
+    } catch (error: any) {
+      console.error("Packback scraper error:", error);
+      if (error.killed) {
+        return res.status(504).json({ message: "Scraper timed out (2 minute limit)" });
+      }
+      res.status(500).json({ message: error.message || "Scraper failed" });
+    }
+  });
+
   // Seed data if empty
   const existingInstructors = await storage.getInstructors();
   if (existingInstructors.length === 0) {

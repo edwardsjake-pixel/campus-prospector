@@ -41,7 +41,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   Plus, Search, MapPin, Mail, Building2, Pencil, Trash2, Filter, 
-  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2, Download, Check, X
+  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2, Download, Check, X, Globe
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CsvImport } from "@/components/csv-import";
@@ -808,6 +808,40 @@ export default function Instructors() {
 
   const [dealToDelete, setDealToDelete] = useState<{ id: number; name: string } | null>(null);
 
+  const [isScrapeOpen, setIsScrapeOpen] = useState(false);
+  const [scrapeUrls, setScrapeUrls] = useState("");
+  const [scrapeInstitution, setScrapeInstitution] = useState("all");
+
+  const packbackScrape = useMutation({
+    mutationFn: async () => {
+      const urls = scrapeUrls
+        .split("\n")
+        .map((u) => u.trim())
+        .filter((u) => u.length > 0);
+      const res = await apiRequest("POST", "/api/scrape/packback", {
+        urls: urls.length > 0 ? urls : undefined,
+        institution: scrapeInstitution,
+      });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
+      toast({
+        title: "Packback scrape complete",
+        description: `Found ${data.total_found} contacts: ${data.created} created, ${data.updated} updated, ${data.existing} already existed`,
+      });
+      setIsScrapeOpen(false);
+      setScrapeUrls("");
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Packback scrape failed",
+        description: err.message || "Could not scrape Packback contacts",
+        variant: "destructive",
+      });
+    },
+  });
+
   const institutions = useMemo(() => {
     const insts = new Set<string>();
     instructors?.forEach(i => {
@@ -970,6 +1004,19 @@ export default function Instructors() {
           >
             <Download className="w-4 h-4 mr-2" />
             Import from HubSpot
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setIsScrapeOpen(true)}
+            disabled={packbackScrape.isPending}
+            data-testid="button-scrape-packback"
+          >
+            {packbackScrape.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Globe className="w-4 h-4 mr-2" />
+            )}
+            {packbackScrape.isPending ? "Scraping..." : "Scrape Packback"}
           </Button>
           <CsvImport type="instructors" />
           <CsvImport type="courses" />
@@ -1468,6 +1515,72 @@ export default function Instructors() {
         </AlertDialogContent>
       </AlertDialog>
       <HubSpotImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
+
+      <Dialog open={isScrapeOpen} onOpenChange={setIsScrapeOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Scrape Packback Contacts</DialogTitle>
+            <DialogDescription>
+              Crawl publicly available pages to find faculty who use Packback as their discussion tool. Scraped contacts will be imported as instructors.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label>Institution Filter</Label>
+              <Select value={scrapeInstitution} onValueChange={setScrapeInstitution}>
+                <SelectTrigger className="mt-1" data-testid="select-scrape-institution">
+                  <SelectValue placeholder="All institutions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Institutions</SelectItem>
+                  <SelectItem value="purdue">Purdue University</SelectItem>
+                  <SelectItem value="indiana">Indiana University Bloomington</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Custom URLs (optional)</Label>
+              <Textarea
+                placeholder={"Add URLs to scrape, one per line.\nLeave empty to use default Packback pages."}
+                value={scrapeUrls}
+                onChange={(e) => setScrapeUrls(e.target.value)}
+                className="mt-1 min-h-[100px] font-mono text-sm"
+                data-testid="input-scrape-urls"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Default: packback.co case studies and resources pages
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsScrapeOpen(false)} data-testid="button-cancel-scrape">
+                Cancel
+              </Button>
+              <Button
+                onClick={() => packbackScrape.mutate()}
+                disabled={packbackScrape.isPending}
+                data-testid="button-start-scrape"
+              >
+                {packbackScrape.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Scraping...
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-4 h-4 mr-2" />
+                    Start Scrape
+                  </>
+                )}
+              </Button>
+            </div>
+            {packbackScrape.isPending && (
+              <p className="text-sm text-muted-foreground text-center">
+                This may take up to 2 minutes while we crawl the pages...
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
