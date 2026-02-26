@@ -16,7 +16,7 @@ declare module "http" {
 
 app.use(
   express.json({
-    limit: "10mb",
+    limit: "50mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
@@ -26,9 +26,13 @@ app.use(
 app.use(express.urlencoded({ extended: false }));
 
 app.use("/api", (_req, res, next) => {
-  res.set("Cache-Control", "no-store");
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  res.removeHeader("ETag");
   next();
 });
+app.set("etag", false);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

@@ -20,7 +20,7 @@ export interface ExtractedSchedule {
 
 export async function extractScheduleFromImage(base64Image: string): Promise<ExtractedSchedule> {
   const response = await openai.chat.completions.create({
-    model: "gpt-5.2",
+    model: "openai/gpt-4o",
     messages: [
       {
         role: "system",

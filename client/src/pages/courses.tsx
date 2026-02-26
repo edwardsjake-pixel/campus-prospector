@@ -494,11 +494,11 @@ export default function Courses() {
                     <TableCell className="font-mono text-xs font-bold text-slate-600" data-testid={`text-code-${course.id}`}>
                       {course.code}
                     </TableCell>
-                    <TableCell className="font-medium text-slate-900" data-testid={`text-course-name-${course.id}`}>
+                    <TableCell className="font-medium text-slate-900 text-xs md:text-sm" data-testid={`text-course-name-${course.id}`}>
                       {course.name}
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm text-slate-600">{getCourseInstructorNames(course.id)}</div>
+                      <div className="text-xs md:text-sm text-slate-600">{getCourseInstructorNames(course.id)}</div>
                       {getCourseInstitution(course.id) && (
                         <div className="text-xs text-muted-foreground flex items-center gap-1">
                           <Building2 className="w-2.5 h-2.5" />

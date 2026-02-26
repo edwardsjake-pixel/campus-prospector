@@ -1198,14 +1198,14 @@ export default function Instructors() {
                           </Button>
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium text-slate-900 text-sm" data-testid={`text-name-${instructor.id}`}>{instructor.name}</div>
+                          <div className="font-medium text-slate-900 text-xs md:text-sm" data-testid={`text-name-${instructor.id}`}>{instructor.name}</div>
                           {(instructor as any).department?.name && (
                             <div className="text-xs text-slate-500">{(instructor as any).department.name}</div>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           {(instructor as any).department?.institution?.name ? (
-                            <div className="flex items-center text-sm text-slate-600">
+                            <div className="flex items-center text-xs md:text-sm text-slate-600">
                               <Building2 className="w-3 h-3 mr-2 text-slate-400" />
                               {(instructor as any).department.institution.name}
                             </div>
@@ -1386,15 +1386,15 @@ export default function Instructors() {
                                 {courses.length === 0 ? (
                                   <p className="text-sm text-muted-foreground">No courses yet.</p>
                                 ) : (
-                                  <div className="border rounded-md overflow-hidden">
+                                  <div className="border rounded-md overflow-x-auto">
                                     <Table>
                                       <TableHeader className="bg-muted/50">
                                         <TableRow>
                                           <TableHead className="text-xs">Code</TableHead>
                                           <TableHead className="text-xs">Name</TableHead>
-                                          <TableHead className="text-xs">Format</TableHead>
-                                          <TableHead className="text-xs">Schedule</TableHead>
-                                          <TableHead className="text-xs">Enrollment</TableHead>
+                                          <TableHead className="text-xs hidden md:table-cell">Format</TableHead>
+                                          <TableHead className="text-xs hidden md:table-cell">Schedule</TableHead>
+                                          <TableHead className="text-xs hidden md:table-cell">Enrollment</TableHead>
                                           <TableHead className="text-xs text-right">Actions</TableHead>
                                         </TableRow>
                                       </TableHeader>
@@ -1405,7 +1405,7 @@ export default function Instructors() {
                                               {course.code}
                                             </TableCell>
                                             <TableCell className="text-sm">{course.name}</TableCell>
-                                            <TableCell>
+                                            <TableCell className="hidden md:table-cell">
                                               <div className="flex items-center gap-1 text-xs">
                                                 {course.format === 'online' ? (
                                                   <Monitor className="w-3 h-3 text-blue-500" />
@@ -1415,7 +1415,7 @@ export default function Instructors() {
                                                 <span className="capitalize">{course.format}</span>
                                               </div>
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="hidden md:table-cell">
                                               {course.daysOfWeek ? (
                                                 <div className="text-xs text-slate-600">
                                                   <span className="font-medium">{course.daysOfWeek.split(",").map((d: string) => d.trim().slice(0, 3)).join("/")}</span>
@@ -1434,7 +1434,7 @@ export default function Instructors() {
                                                 <span className="text-xs text-muted-foreground">--</span>
                                               )}
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="hidden md:table-cell">
                                               <Badge variant={course.enrollment && course.enrollment > 100 ? "default" : "secondary"}>
                                                 {course.enrollment || 0}
                                               </Badge>
