@@ -72,14 +72,14 @@ export interface IStorage {
   deleteOfficeHour(id: number): Promise<void>;
 
   // Visits
-  getVisits(userId: string): Promise<Visit[]>;
+  getVisits(userId?: string): Promise<Visit[]>;
   createVisit(visit: InsertVisit & { userId: string }): Promise<Visit>;
   
   // Interactions
   createInteraction(interaction: InsertVisitInteraction): Promise<VisitInteraction>;
 
   // Planned Meetings
-  getPlannedMeetings(userId: string, date?: string): Promise<PlannedMeeting[]>;
+  getPlannedMeetings(userId?: string, date?: string): Promise<PlannedMeeting[]>;
   createPlannedMeeting(meeting: InsertPlannedMeeting): Promise<PlannedMeeting>;
   updatePlannedMeeting(id: number, updates: Partial<InsertPlannedMeeting>): Promise<PlannedMeeting>;
   deletePlannedMeeting(id: number): Promise<void>;
@@ -380,8 +380,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Visits
-  async getVisits(userId: string): Promise<Visit[]> {
-    return await db.select().from(visits).where(eq(visits.userId, userId));
+  async getVisits(userId?: string): Promise<Visit[]> {
+    if (userId) return await db.select().from(visits).where(eq(visits.userId, userId));
+    return await db.select().from(visits);
   }
 
   async createVisit(visit: InsertVisit & { userId: string }): Promise<Visit> {
@@ -396,9 +397,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Planned Meetings
-  async getPlannedMeetings(userId: string, date?: string): Promise<PlannedMeeting[]> {
-    const conditions = [eq(plannedMeetings.userId, userId)];
+  async getPlannedMeetings(userId?: string, date?: string): Promise<PlannedMeeting[]> {
+    const conditions = [];
+    if (userId) conditions.push(eq(plannedMeetings.userId, userId));
     if (date) conditions.push(eq(plannedMeetings.date, date));
+    if (conditions.length === 0) return await db.select().from(plannedMeetings);
     return await db.select().from(plannedMeetings).where(and(...conditions));
   }
 

@@ -209,8 +209,7 @@ export async function registerRoutes(
 
   // === Visits ===
   app.get(api.visits.list.path, async (req, res) => {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-    const visits = await storage.getVisits((req.user as any).claims.sub);
+    const visits = await storage.getVisits();
     res.json(visits);
   });
 
@@ -241,9 +240,8 @@ export async function registerRoutes(
 
   // === Planned Meetings ===
   app.get(api.plannedMeetings.list.path, async (req, res) => {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     const date = req.query.date as string | undefined;
-    const meetings = await storage.getPlannedMeetings((req.user as any).claims.sub, date);
+    const meetings = await storage.getPlannedMeetings(undefined, date);
     res.json(meetings);
   });
 
@@ -262,7 +260,6 @@ export async function registerRoutes(
   });
 
   app.put(api.plannedMeetings.update.path, async (req, res) => {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     try {
       const input = api.plannedMeetings.update.input.parse(req.body);
       const meeting = await storage.updatePlannedMeeting(Number(req.params.id), input);
@@ -273,7 +270,6 @@ export async function registerRoutes(
   });
 
   app.delete(api.plannedMeetings.delete.path, async (req, res) => {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     try {
       await storage.deletePlannedMeeting(Number(req.params.id));
       res.json({ message: "Deleted" });
@@ -555,7 +551,6 @@ export async function registerRoutes(
 
   // === Deals ===
   app.get("/api/deals", async (req, res) => {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     const instructorId = req.query.instructorId ? Number(req.query.instructorId) : undefined;
     if (instructorId) {
       const deals = await storage.getDealsByInstructor(instructorId);

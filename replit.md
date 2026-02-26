@@ -36,6 +36,7 @@ Preferred communication style: Simple, everyday language.
 - **API Pattern**: RESTful endpoints following the contract defined in `shared/routes.ts`
 - **API Contract**: Centralized API definitions in `shared/routes.ts` using Zod schemas — both input validation and response types are defined here
 - **Authentication**: Replit Auth via OpenID Connect (OIDC) with Passport.js, session-based auth stored in PostgreSQL via `connect-pg-simple`
+- **Data Access**: All read endpoints (instructors, courses, deals, planned meetings, visits, availability) are open to all users without auth. Write operations (create visit, create meeting) require authentication to set the userId. This is intentional — data is shared across all users for now.
 - **Auth files are in**: `server/replit_integrations/auth/` — these are critical and should not be deleted
 - **Build**: Custom build script (`script/build.ts`) uses esbuild for server and Vite for client; outputs to `dist/`
 - **SIGHUP handling**: The server ignores SIGHUP signals (`process.on("SIGHUP", () => {})`) to prevent the Replit environment's delayed SIGHUP from killing the process ~25s after startup
