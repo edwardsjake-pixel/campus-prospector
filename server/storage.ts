@@ -177,8 +177,16 @@ export class DatabaseStorage implements IStorage {
       if (existing) {
         instId = existing.id;
       } else {
-        const [created] = await db.insert(institutions).values({ name: instNameClean }).returning();
-        instId = created.id;
+        const normalizeForMatch = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        const normalized = normalizeForMatch(instNameClean);
+        const allInsts = await db.select().from(institutions);
+        const fuzzyMatch = allInsts.find(i => normalizeForMatch(i.name) === normalized);
+        if (fuzzyMatch) {
+          instId = fuzzyMatch.id;
+        } else {
+          const [created] = await db.insert(institutions).values({ name: instNameClean }).returning();
+          instId = created.id;
+        }
       }
     }
 

@@ -283,6 +283,37 @@ export async function registerRoutes(
   });
 
   // === Availability (Gantt view) ===
+  function courseDaysInclude(daysOfWeek: string, targetDay: string): boolean {
+    const parts = daysOfWeek.split(",").map(d => d.trim());
+    for (const part of parts) {
+      if (part === targetDay) return true;
+      const lower = part.toLowerCase();
+      const abbrevMap: Record<string, string[]> = {
+        monday: ["m", "mo", "mon", "monday"],
+        tuesday: ["t", "tu", "tue", "tues", "tuesday"],
+        wednesday: ["w", "we", "wed", "wednesday"],
+        thursday: ["r", "th", "thu", "thur", "thurs", "thursday"],
+        friday: ["f", "fr", "fri", "friday"],
+        saturday: ["s", "sa", "sat", "saturday"],
+        sunday: ["u", "su", "sun", "sunday"],
+      };
+      const targetLower = targetDay.toLowerCase();
+      const targetAbbrevs = abbrevMap[targetLower] || [];
+      if (targetAbbrevs.includes(lower)) return true;
+      const compound: Record<string, string[]> = {
+        mwf: ["monday", "wednesday", "friday"],
+        mw: ["monday", "wednesday"],
+        tuth: ["tuesday", "thursday"],
+        tr: ["tuesday", "thursday"],
+        twth: ["tuesday", "thursday"],
+        mtwthf: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+        mtwrf: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+      };
+      if (compound[lower] && compound[lower].includes(targetLower)) return true;
+    }
+    return false;
+  }
+
   app.get(api.availability.list.path, async (req, res) => {
     const dayOfWeek = req.query.dayOfWeek as string;
     if (!dayOfWeek) return res.status(400).json({ message: "dayOfWeek is required" });
@@ -321,7 +352,7 @@ export async function registerRoutes(
       const instructorCourses = instructorCourseIds.map(id => courseMap.get(id)).filter(Boolean) as typeof allCourses;
 
       const lectures = instructorCourses.filter(
-        c => c.daysOfWeek && c.daysOfWeek.split(",").map(d => d.trim()).includes(dayOfWeek) &&
+        c => c.daysOfWeek && courseDaysInclude(c.daysOfWeek, dayOfWeek) &&
           c.lectureStartTime && c.lectureEndTime
       );
 
