@@ -27,7 +27,8 @@ Preferred communication style: Simple, everyday language.
 - **UI Components**: shadcn/ui (new-york style) built on Radix UI primitives with Tailwind CSS
 - **Styling**: Tailwind CSS with CSS variables for theming (light/dark mode support), custom fonts (Plus Jakarta Sans for display, Inter for body)
 - **Forms**: React Hook Form with Zod resolvers for validation
-- **Key Features**: Voice dictation (Web Speech API), audio recording (MediaRecorder API), calendar-based visit planning
+- **Key Features**: Voice dictation (Web Speech API), audio recording (MediaRecorder API), calendar-based visit planning, AI-powered schedule photo extraction (OpenAI GPT-5.2 vision)
+- **Mobile Responsiveness**: All data-heavy pages (instructors, courses, availability, planner) use `overflow-x-auto` table wrappers, responsive column hiding (`hidden md:table-cell`), sticky instructor name columns on availability/planner grids, stacking filter bars on mobile, and minimum 44px touch targets
 - **Path aliases**: `@/` maps to `client/src/`, `@shared/` maps to `shared/`
 
 ### Backend Architecture
@@ -80,6 +81,8 @@ Instructors → Planned Meetings (via instructorId FK)
 - `client/src/components/csv-import.tsx` — Reusable CSV import dialog (parses CSV, column mapping, preview, bulk upload)
 - `client/src/components/voice-dictation.tsx` — Voice dictation using Web Speech API
 - `client/src/components/audio-recorder.tsx` — Audio recording using MediaRecorder API
+- `client/src/components/schedule-photo-capture.tsx` — Photo capture with AI schedule extraction (GPT-5.2 vision)
+- `client/src/components/instructor-detail-popover.tsx` — Instructor detail toggle with optional HubSpot link
 
 ### Storage Layer
 - `server/storage.ts` defines an `IStorage` interface and `DatabaseStorage` implementation
@@ -129,6 +132,14 @@ Instructors → Planned Meetings (via instructorId FK)
 - **Deal import**: Fetches deals associated with matched contacts, stores in `deals` table linked to instructors (and optionally courses via courseId)
 - **API endpoints**: `POST /api/hubspot/sync` (accepts `companyNames: string[]`), `POST /api/hubspot/import-preview` (accepts `companyNames` or `school`), `POST /api/hubspot/search-contacts`, `GET /api/deals`, `GET /api/hubspot/deal-stages`, `GET /api/institutions/active`
 - **UI**: "Sync HubSpot" button on Faculty & Courses page (syncs all active institutions), "Import from HubSpot" dialog with searchable multi-institution picker (all 326 R1/R2 universities), deal pipeline card on Dashboard, deal badges on instructor rows and planner meetings
+- **HubSpot contact links**: Instructors with deals show a clickable HubSpot icon (SiHubspot from react-icons/si) that opens `https://app.hubspot.com/contacts/search?query={email}` in a new tab. Shown on instructors page, availability page, and planner page via InstructorDetailToggle component.
+
+### AI Schedule Photo Extraction
+- **Service file**: `server/schedule-extractor.ts` — OpenAI GPT-5.2 vision API client for extracting schedule data from photos
+- **Integration**: Uses Replit AI Integrations (OpenAI) — `AI_INTEGRATIONS_OPENAI_API_KEY` / `AI_INTEGRATIONS_OPENAI_BASE_URL` env vars
+- **API endpoints**: `POST /api/schedule/extract-from-photo` (accepts `{ image: base64, instructorId? }`), `POST /api/schedule/save-extracted` (accepts `{ instructorId, entries[] }`)
+- **UI**: "Scan Schedule" button on Availability page opens camera/file picker, sends photo to AI, shows editable confirmation dialog, saves as office hours
+- **Component**: `client/src/components/schedule-photo-capture.tsx`
 
 ### Packback Web Scraper (Crawl4AI)
 - **Scraper file**: `server/scraper/packback_scraper.py` — Python script using Crawl4AI to find faculty who use Packback

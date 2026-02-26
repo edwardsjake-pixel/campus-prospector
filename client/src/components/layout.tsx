@@ -88,10 +88,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile Sidebar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900 flex items-center px-4 z-50 border-b border-white/10">
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-slate-900 flex items-center px-3 z-50 border-b border-white/10">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 min-w-[44px] min-h-[44px]">
               <Menu className="w-6 h-6" />
             </Button>
           </SheetTrigger>
@@ -103,8 +103,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-64 pt-16 lg:pt-0 min-h-screen">
-        <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <main className="flex-1 lg:ml-64 pt-14 lg:pt-0 min-h-screen">
+        <div className="p-3 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {children}
         </div>
       </main>

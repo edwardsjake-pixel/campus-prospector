@@ -7,6 +7,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { insertInstructorSchema, insertCourseSchema, insertOfficeHourSchema, insertVisitSchema, insertVisitInteractionSchema, insertPlannedMeetingSchema } from "@shared/schema";
 import { syncHubSpotData, fetchDealStageLabels, fetchImportPreview, importSelectedContacts, searchHubSpotContacts, type HubSpotImportPreviewContact } from "./hubspot";
+import { extractScheduleFromImage } from "./schedule-extractor";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -639,6 +640,60 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("HubSpot import error:", error);
       res.status(500).json({ message: error.message || "Failed to import contacts" });
+    }
+  });
+
+  // === Schedule Extraction from Photo ===
+  app.post("/api/schedule/extract-from-photo", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const { image, instructorId } = req.body;
+      if (!image || typeof image !== "string") {
+        return res.status(400).json({ message: "image (base64) is required" });
+      }
+      const extracted = await extractScheduleFromImage(image);
+      res.json(extracted);
+    } catch (error: any) {
+      console.error("Schedule extraction error:", error);
+      res.status(500).json({ message: error.message || "Failed to extract schedule from photo" });
+    }
+  });
+
+  app.post("/api/schedule/save-extracted", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const { instructorId, entries } = req.body;
+      if (!instructorId || !Array.isArray(entries) || entries.length === 0) {
+        return res.status(400).json({ message: "instructorId and entries are required" });
+      }
+      const instructor = await storage.getInstructor(Number(instructorId));
+      if (!instructor) {
+        return res.status(404).json({ message: "Instructor not found" });
+      }
+      const validDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+      const timeRegex = /^\d{2}:\d{2}(:\d{2})?$/;
+      let created = 0;
+      for (const entry of entries) {
+        if (!entry.dayOfWeek || !validDays.includes(entry.dayOfWeek)) {
+          continue;
+        }
+        if (!entry.startTime || !timeRegex.test(entry.startTime) || !entry.endTime || !timeRegex.test(entry.endTime)) {
+          continue;
+        }
+        await storage.createOfficeHour({
+          instructorId: Number(instructorId),
+          dayOfWeek: entry.dayOfWeek,
+          startTime: entry.startTime.length === 5 ? entry.startTime + ":00" : entry.startTime,
+          endTime: entry.endTime.length === 5 ? entry.endTime + ":00" : entry.endTime,
+          location: entry.location || null,
+          isVirtual: false,
+        });
+        created++;
+      }
+      res.json({ success: true, created });
+    } catch (error: any) {
+      console.error("Schedule save error:", error);
+      res.status(500).json({ message: error.message || "Failed to save schedule" });
     }
   });
 

@@ -2,15 +2,17 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, BookOpen, Clock, Mail, MapPin, Building2 } from "lucide-react";
+import { SiHubspot } from "react-icons/si";
 import type { Instructor, Course, OfficeHour } from "@shared/schema";
 
 interface InstructorDetailProps {
   instructor: Instructor;
   courses?: Course[];
   officeHours?: OfficeHour[];
+  hubspotUrl?: string | null;
 }
 
-export function InstructorDetailToggle({ instructor, courses = [], officeHours = [] }: InstructorDetailProps) {
+export function InstructorDetailToggle({ instructor, courses = [], officeHours = [], hubspotUrl }: InstructorDetailProps) {
   const [expanded, setExpanded] = useState(false);
 
   const hasCourses = courses.length > 0;
@@ -43,6 +45,18 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
             <div className="flex items-center gap-1 text-muted-foreground">
               <Mail className="w-3 h-3 shrink-0" />
               <span className="truncate">{instructor.email}</span>
+              {hubspotUrl && (
+                <a
+                  href={hubspotUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="shrink-0 text-muted-foreground hover:text-orange-600 transition-colors"
+                  data-testid={`link-hubspot-detail-${instructor.id}`}
+                >
+                  <SiHubspot className="w-3.5 h-3.5" />
+                </a>
+              )}
             </div>
           )}
 

@@ -409,7 +409,7 @@ export default function Courses() {
     <Layout>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-slate-900" data-testid="text-courses-title">Courses</h1>
+          <h1 className="text-2xl md:text-3xl font-display font-bold text-slate-900" data-testid="text-courses-title">Courses</h1>
           <p className="text-slate-500">Track large lecture sections and online courses.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -439,8 +439,8 @@ export default function Courses() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-0 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
           <Input 
             placeholder="Search courses..." 
@@ -451,7 +451,7 @@ export default function Courses() {
           />
         </div>
         <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
-          <SelectTrigger className="w-[200px]" data-testid="select-institution-filter">
+          <SelectTrigger className="w-full sm:w-[200px]" data-testid="select-institution-filter">
             <Building2 className="w-4 h-4 mr-1 text-muted-foreground" />
             <SelectValue placeholder="All Institutions" />
           </SelectTrigger>
@@ -466,15 +466,16 @@ export default function Courses() {
 
       <Card className="border-none shadow-md overflow-hidden">
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-slate-50">
               <TableRow>
                 <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Instructor</TableHead>
-                <TableHead>Format</TableHead>
-                <TableHead>Schedule</TableHead>
-                <TableHead>Enrollment</TableHead>
+                <TableHead className="hidden md:table-cell">Format</TableHead>
+                <TableHead className="hidden md:table-cell">Schedule</TableHead>
+                <TableHead className="hidden md:table-cell">Enrollment</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -505,7 +506,7 @@ export default function Courses() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       <div className="flex items-center gap-2">
                         {course.format === 'online' ? (
                           <Monitor className="w-3 h-3 text-blue-500" />
@@ -515,7 +516,7 @@ export default function Courses() {
                         <span className="capitalize text-sm">{course.format}</span>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       {course.daysOfWeek ? (
                         <div className="text-xs text-slate-600">
                           <span className="font-medium">{course.daysOfWeek.split(",").map((d: string) => d.trim().slice(0, 3)).join("/")}</span>
@@ -534,7 +535,7 @@ export default function Courses() {
                         <span className="text-xs text-muted-foreground">--</span>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       <Badge variant={course.enrollment && course.enrollment > 100 ? "default" : "secondary"}>
                         {course.enrollment || 0} Students
                       </Badge>
@@ -564,6 +565,7 @@ export default function Courses() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

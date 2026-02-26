@@ -50,7 +50,7 @@ function WeeklyCalendar({
         </Link>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
           {weekDays.map((day) => {
             const dateStr = format(day, "yyyy-MM-dd");
             const dayMeetings = meetings
@@ -461,7 +461,7 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="space-y-2">
-        <h1 className="text-3xl font-display font-bold" data-testid="text-dashboard-title">Campus Overview</h1>
+        <h1 className="text-2xl md:text-3xl font-display font-bold" data-testid="text-dashboard-title">Campus Overview</h1>
         <p className="text-muted-foreground">Your meetings, faculty, and pipeline at a glance.</p>
       </div>
 

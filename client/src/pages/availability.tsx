@@ -12,8 +12,9 @@ import { MapPin, User, Filter, CalendarPlus, Building2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import type { Instructor, OfficeHour, Course } from "@shared/schema";
+import type { Instructor, OfficeHour, Course, Deal } from "@shared/schema";
 import { InstructorDetailToggle } from "@/components/instructor-detail-popover";
+import { SchedulePhotoCapture } from "@/components/schedule-photo-capture";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -209,6 +210,19 @@ export default function Availability() {
 
   const todayDateStr = format(new Date(), "yyyy-MM-dd");
 
+  const { data: allDeals = [] } = useQuery<Deal[]>({ queryKey: ["/api/deals"] });
+  const dealsByInstructor = useMemo(() => {
+    const map = new Map<number, Deal[]>();
+    for (const deal of allDeals) {
+      if (deal.instructorId) {
+        const list = map.get(deal.instructorId) || [];
+        list.push(deal);
+        map.set(deal.instructorId, list);
+      }
+    }
+    return map;
+  }, [allDeals]);
+
   const { data: rows = [], isLoading } = useQuery<AvailabilityRow[]>({
     queryKey: ["/api/availability", selectedDay, institutionFilter, showAll],
     queryFn: async () => {
@@ -305,7 +319,7 @@ export default function Availability() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-slate-900" data-testid="text-availability-title">
+            <h1 className="text-2xl md:text-3xl font-display font-bold text-slate-900" data-testid="text-availability-title">
               Campus Availability
             </h1>
             <p className="text-slate-500 mt-1">See which instructors are likely on campus</p>
@@ -314,10 +328,10 @@ export default function Availability() {
 
         <Card>
           <CardHeader className="flex flex-col gap-4 space-y-0 pb-4">
-            <div className="flex flex-row items-center justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
                 <Select value={selectedDay} onValueChange={setSelectedDay}>
-                  <SelectTrigger className="w-[160px]" data-testid="select-day">
+                  <SelectTrigger className="w-full sm:w-[160px]" data-testid="select-day">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -328,7 +342,7 @@ export default function Availability() {
                 </Select>
 
                 <Select value={institutionFilter} onValueChange={(val) => { setInstitutionFilter(val); setDepartmentFilter("all"); }}>
-                  <SelectTrigger className="w-[200px]" data-testid="select-institution-filter">
+                  <SelectTrigger className="w-full sm:w-[200px]" data-testid="select-institution-filter">
                     <Building2 className="w-4 h-4 mr-1 text-muted-foreground" />
                     <SelectValue placeholder="All Institutions" />
                   </SelectTrigger>
@@ -341,7 +355,7 @@ export default function Availability() {
                 </Select>
 
                 <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                  <SelectTrigger className="w-[180px]" data-testid="select-department-filter">
+                  <SelectTrigger className="w-full sm:w-[180px]" data-testid="select-department-filter">
                     <Filter className="w-4 h-4 mr-1 text-muted-foreground" />
                     <SelectValue placeholder="All Departments" />
                   </SelectTrigger>
@@ -364,9 +378,11 @@ export default function Availability() {
                     Show all instructors
                   </Label>
                 </div>
+
+                <SchedulePhotoCapture />
               </div>
 
-              <div className="flex items-center gap-4 text-xs flex-wrap">
+              <div className="flex items-center gap-3 text-xs flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm bg-emerald-500/20 border border-emerald-400/50" />
                   <span className="text-muted-foreground">Office Hours</span>
@@ -398,7 +414,7 @@ export default function Availability() {
               <div className="overflow-x-auto">
                 <div className="min-w-[900px]">
                   <div className="flex border-b bg-muted/30">
-                    <div className="w-56 shrink-0 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r">
+                    <div className="w-44 md:w-56 shrink-0 px-3 md:px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r sticky left-0 z-10 bg-muted/30">
                       Instructor
                     </div>
                     <div className="flex-1 relative">
@@ -428,7 +444,7 @@ export default function Availability() {
                         className={`flex border-b last:border-b-0 hover-elevate ${!hasSchedule ? "opacity-60" : ""}`}
                         data-testid={`row-instructor-${row.instructor.id}`}
                       >
-                        <div className="w-56 shrink-0 px-4 py-3 border-r flex items-start gap-2">
+                        <div className="w-44 md:w-56 shrink-0 px-3 md:px-4 py-3 border-r flex items-start gap-2 sticky left-0 z-10 bg-background">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate" data-testid={`text-instructor-name-${row.instructor.id}`}>
                               {row.instructor.name}
@@ -455,6 +471,12 @@ export default function Availability() {
                               instructor={row.instructor}
                               courses={row.courses || []}
                               officeHours={row.allOfficeHours || row.officeHours}
+                              hubspotUrl={(() => {
+                                const instDeals = dealsByInstructor.get(row.instructor.id) || [];
+                                return instDeals.length > 0 && instDeals[0].hubspotContactId && row.instructor.email
+                                  ? `https://app.hubspot.com/contacts/search?query=${encodeURIComponent(row.instructor.email)}`
+                                  : null;
+                              })()}
                             />
                           </div>
                           {hasSchedule && (

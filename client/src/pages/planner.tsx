@@ -445,7 +445,7 @@ export default function Planner() {
     <Layout>
       <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
         <div className="space-y-1">
-          <h1 className="text-3xl font-display font-bold" data-testid="text-planner-title">Campus Plan</h1>
+          <h1 className="text-2xl md:text-3xl font-display font-bold" data-testid="text-planner-title">Campus Plan</h1>
           <p className="text-muted-foreground">Plan your campus day and schedule instructor meetings.</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -583,7 +583,7 @@ export default function Planner() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="space-y-4">
           <Card>
             <CardContent className="p-4">
@@ -756,12 +756,12 @@ export default function Planner() {
           )}
         </div>
 
-        <div className="xl:col-span-3 space-y-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <h3 className="font-semibold text-lg">
+        <div className="lg:col-span-3 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h3 className="font-semibold text-base sm:text-lg">
               Day Plan — {date ? format(date, "EEEE, MMMM d, yyyy") : "Select a date"}
             </h3>
-            <div className="flex items-center gap-4 text-xs flex-wrap">
+            <div className="flex items-center gap-3 text-xs flex-wrap">
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-sm bg-purple-500/25 border border-purple-400/60" />
                 <span className="text-muted-foreground">Scheduled</span>
@@ -799,7 +799,7 @@ export default function Planner() {
                 <div className="overflow-x-auto">
                   <div className="min-w-[800px]">
                     <div className="flex border-b bg-muted/30">
-                      <div className="w-52 shrink-0 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r">
+                      <div className="w-40 md:w-52 shrink-0 px-2 md:px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r sticky left-0 z-10 bg-muted/30">
                         Instructor
                       </div>
                       <div className="flex-1 relative">
@@ -838,7 +838,7 @@ export default function Planner() {
                           className={`flex border-b last:border-b-0 transition-all ${isDragging ? "opacity-40" : ""} ${isDragOver ? "border-t-2 border-t-primary" : ""}`}
                           data-testid={`planner-row-${row.instructor.id}`}
                         >
-                          <div className="w-52 shrink-0 px-2 py-3 border-r flex items-center gap-1">
+                          <div className="w-40 md:w-52 shrink-0 px-2 py-3 border-r flex items-center gap-1 sticky left-0 z-10 bg-background">
                             <div
                               draggable
                               onDragStart={(e) => {
@@ -869,6 +869,12 @@ export default function Planner() {
                               instructor={row.instructor}
                               courses={row.courses || []}
                               officeHours={row.allOfficeHours || row.officeHours}
+                              hubspotUrl={(() => {
+                                const instDeals = dealsByInstructor.get(row.instructor.id) || [];
+                                return instDeals.length > 0 && instDeals[0].hubspotContactId && row.instructor.email
+                                  ? `https://app.hubspot.com/contacts/search?query=${encodeURIComponent(row.instructor.email)}`
+                                  : null;
+                              })()}
                             />
                             </div>
                           </div>

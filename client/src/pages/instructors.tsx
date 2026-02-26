@@ -41,8 +41,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   Plus, Search, MapPin, Mail, Building2, Pencil, Trash2, Filter, 
-  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2, Download, Check, X, Globe
+  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2, Download, Check, X, Globe, ExternalLink
 } from "lucide-react";
+import { SiHubspot } from "react-icons/si";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CsvImport } from "@/components/csv-import";
 import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
@@ -1054,7 +1055,7 @@ export default function Instructors() {
     <Layout>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-slate-900" data-testid="text-faculty-title">Faculty & Courses</h1>
+          <h1 className="text-2xl md:text-3xl font-display font-bold text-slate-900" data-testid="text-faculty-title">Faculty & Courses</h1>
           <p className="text-slate-500">Manage your instructor contacts and their course sections.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -1117,8 +1118,8 @@ export default function Instructors() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-0 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
           <Input 
             placeholder="Search by name, department, institution, or course..." 
@@ -1129,7 +1130,7 @@ export default function Instructors() {
           />
         </div>
         <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
-          <SelectTrigger className="w-[200px]" data-testid="select-institution-filter">
+          <SelectTrigger className="w-full sm:w-[200px]" data-testid="select-institution-filter">
             <Building2 className="w-4 h-4 mr-1 text-muted-foreground" />
             <SelectValue placeholder="All Institutions" />
           </SelectTrigger>
@@ -1144,16 +1145,17 @@ export default function Instructors() {
 
       <Card className="border-none shadow-md overflow-hidden">
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-slate-50">
               <TableRow>
                 <TableHead className="w-8"></TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Institution</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Courses</TableHead>
-                <TableHead>Deals</TableHead>
+                <TableHead className="hidden md:table-cell">Contact</TableHead>
+                <TableHead className="hidden lg:table-cell">Location</TableHead>
+                <TableHead className="hidden md:table-cell">Courses</TableHead>
+                <TableHead className="hidden md:table-cell">Deals</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -1196,7 +1198,7 @@ export default function Instructors() {
                           </Button>
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium text-slate-900" data-testid={`text-name-${instructor.id}`}>{instructor.name}</div>
+                          <div className="font-medium text-slate-900 text-sm" data-testid={`text-name-${instructor.id}`}>{instructor.name}</div>
                           {(instructor as any).department?.name && (
                             <div className="text-xs text-slate-500">{(instructor as any).department.name}</div>
                           )}
@@ -1211,15 +1213,27 @@ export default function Instructors() {
                             <span className="text-xs text-muted-foreground">--</span>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           {instructor.email && (
-                            <div className="flex items-center text-sm text-slate-600">
-                              <Mail className="w-3 h-3 mr-2 text-slate-400" />
-                              {instructor.email}
+                            <div className="flex items-center gap-1 text-sm text-slate-600">
+                              <Mail className="w-3 h-3 mr-1 text-slate-400 shrink-0" />
+                              <span className="truncate">{instructor.email}</span>
+                              {instructorDeals.length > 0 && instructorDeals[0].hubspotContactId && (
+                                <a
+                                  href={`https://app.hubspot.com/contacts/search?query=${encodeURIComponent(instructor.email)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="shrink-0 text-muted-foreground hover:text-orange-600 transition-colors"
+                                  data-testid={`link-hubspot-${instructor.id}`}
+                                >
+                                  <SiHubspot className="w-4 h-4" />
+                                </a>
+                              )}
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           {fullLocation && (
                             <div className="flex items-center text-sm text-slate-600">
                               <MapPin className="w-3 h-3 mr-2 text-slate-400" />
@@ -1227,13 +1241,13 @@ export default function Instructors() {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <Badge variant="secondary">
                             <BookOpen className="w-3 h-3 mr-1" />
                             {courses.length}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           {instructorDeals.length > 0 ? (
                             <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800">
                               <DollarSign className="w-3 h-3 mr-1" />
@@ -1302,8 +1316,19 @@ export default function Instructors() {
 
                               {instructorDeals.length > 0 && (
                                 <div>
-                                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+                                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
                                     <DollarSign className="w-3 h-3" /> HubSpot Deals ({instructorDeals.length})
+                                    {instructor.email && instructorDeals[0].hubspotContactId && (
+                                      <a
+                                        href={`https://app.hubspot.com/contacts/search?query=${encodeURIComponent(instructor.email)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-muted-foreground hover:text-orange-600 transition-colors"
+                                        data-testid={`link-hubspot-expanded-${instructor.id}`}
+                                      >
+                                        <SiHubspot className="w-4 h-4" />
+                                      </a>
+                                    )}
                                   </h4>
                                   <div className="flex flex-wrap gap-2">
                                     {instructorDeals.map((deal) => (
@@ -1451,6 +1476,7 @@ export default function Instructors() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
