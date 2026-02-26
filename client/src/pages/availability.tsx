@@ -281,11 +281,14 @@ export default function Availability() {
 
   const filteredRows = useMemo(() => {
     let filtered = rows;
+    if (institutionFilter !== "all") {
+      filtered = filtered.filter(r => (r.instructor as any).department?.institution?.name === institutionFilter);
+    }
     if (departmentFilter !== "all") {
       filtered = filtered.filter(r => (r.instructor as any).department?.name === departmentFilter);
     }
     return filtered;
-  }, [rows, departmentFilter]);
+  }, [rows, institutionFilter, departmentFilter]);
 
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i);
 

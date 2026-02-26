@@ -287,8 +287,15 @@ export async function registerRoutes(
     const dayOfWeek = req.query.dayOfWeek as string;
     if (!dayOfWeek) return res.status(400).json({ message: "dayOfWeek is required" });
 
-    const institutionId = req.query.institutionId ? Number(req.query.institutionId) : undefined;
+    let institutionId = req.query.institutionId ? Number(req.query.institutionId) : undefined;
+    const institutionName = req.query.institution as string | undefined;
     const showAll = req.query.showAll === "true";
+
+    if (!institutionId && institutionName) {
+      const allInstitutions = await storage.getInstitutions();
+      const match = allInstitutions.find(i => i.name === institutionName);
+      if (match) institutionId = match.id;
+    }
 
     const filters: any = {};
     if (institutionId) filters.institutionId = institutionId;
