@@ -85,7 +85,7 @@ Instructors → Planned Meetings (via instructorId FK)
 - `client/src/components/voice-dictation.tsx` — Voice dictation using Web Speech API
 - `client/src/components/audio-recorder.tsx` — Audio recording using MediaRecorder API
 - `client/src/components/schedule-photo-capture.tsx` — Photo capture with AI schedule extraction (GPT-4o vision)
-- `client/src/components/instructor-detail-popover.tsx` — Instructor detail toggle with optional HubSpot link
+- `client/src/components/instructor-detail-popover.tsx` — Instructor detail toggle with inline editing for office hours and courses, plus optional HubSpot link
 
 ### Storage Layer
 - `server/storage.ts` defines an `IStorage` interface and `DatabaseStorage` implementation
