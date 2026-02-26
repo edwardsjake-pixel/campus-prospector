@@ -6,8 +6,7 @@ import { registerAuthRoutes } from "./replit_integrations/auth";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { insertInstructorSchema, insertCourseSchema, insertOfficeHourSchema, insertVisitSchema, insertVisitInteractionSchema, insertPlannedMeetingSchema } from "@shared/schema";
-import { syncHubSpotData, fetchDealStageLabels, fetchImportPreview, importSelectedContacts, searchHubSpotContacts, type HubSpotImportPreviewContact } from "./hubspot";
-import { extractScheduleFromImage } from "./schedule-extractor";
+import type { HubSpotImportPreviewContact } from "./hubspot";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -551,6 +550,7 @@ export async function registerRoutes(
       if (!Array.isArray(companyNames) || companyNames.length === 0) {
         return res.status(400).json({ message: "companyNames array is required" });
       }
+      const { syncHubSpotData } = await import("./hubspot");
       const result = await syncHubSpotData(companyNames, {
         getInstructorByEmail: (email) => storage.getInstructorByEmail(email),
         createInstructor: (data) => storage.createInstructor(data),
@@ -567,6 +567,7 @@ export async function registerRoutes(
 
   app.get("/api/hubspot/deal-stages", async (_req, res) => {
     try {
+      const { fetchDealStageLabels } = await import("./hubspot");
       const labels = await fetchDealStageLabels();
       res.json(labels);
     } catch (error: any) {
@@ -586,6 +587,7 @@ export async function registerRoutes(
           .filter((e): e is string => !!e)
       );
       const recentOnly = req.body.recentOnly === true;
+      const { fetchDealStageLabels, fetchImportPreview } = await import("./hubspot");
       const stageLabels = await fetchDealStageLabels();
       const preview = await fetchImportPreview({ companyNames, school }, existingEmails, stageLabels, recentOnly);
       res.json(preview);
@@ -611,7 +613,8 @@ export async function registerRoutes(
           .filter((e): e is string => !!e)
       );
       const recentOnly = req.body.recentOnly === true;
-      const stageLabels = await fetchDealStageLabels();
+      const { fetchDealStageLabels: getDealStageLabels, searchHubSpotContacts } = await import("./hubspot");
+      const stageLabels = await getDealStageLabels();
       const results = await searchHubSpotContacts({ companyNames, school }, query, existingEmails, stageLabels, recentOnly);
       res.json(results);
     } catch (error: any) {
@@ -627,6 +630,7 @@ export async function registerRoutes(
       if (!Array.isArray(contacts) || contacts.length === 0) {
         return res.status(400).json({ message: "contacts array is required" });
       }
+      const { importSelectedContacts } = await import("./hubspot");
       const result = await importSelectedContacts(contacts, {
         getInstructorByEmail: (email) => storage.getInstructorByEmail(email),
         createInstructor: (data) => storage.createInstructor(data),
@@ -651,6 +655,7 @@ export async function registerRoutes(
       if (!image || typeof image !== "string") {
         return res.status(400).json({ message: "image (base64) is required" });
       }
+      const { extractScheduleFromImage } = await import("./schedule-extractor");
       const extracted = await extractScheduleFromImage(image);
       res.json(extracted);
     } catch (error: any) {

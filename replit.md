@@ -38,6 +38,8 @@ Preferred communication style: Simple, everyday language.
 - **Authentication**: Replit Auth via OpenID Connect (OIDC) with Passport.js, session-based auth stored in PostgreSQL via `connect-pg-simple`
 - **Auth files are in**: `server/replit_integrations/auth/` — these are critical and should not be deleted
 - **Build**: Custom build script (`script/build.ts`) uses esbuild for server and Vite for client; outputs to `dist/`
+- **SIGHUP handling**: The server ignores SIGHUP signals (`process.on("SIGHUP", () => {})`) to prevent the Replit environment's delayed SIGHUP from killing the process ~25s after startup
+- **Lazy imports**: HubSpot (`./hubspot`) and schedule extractor (`./schedule-extractor`) modules are lazy-imported in route handlers to reduce startup memory usage
 
 ### Data Storage
 - **Database**: PostgreSQL via `DATABASE_URL` environment variable
