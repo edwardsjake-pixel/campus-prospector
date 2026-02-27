@@ -272,19 +272,21 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
           )}
 
           <div>
-            <div className="flex items-center justify-between mb-0.5">
+            <div className="flex items-center justify-between mb-1">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                 <Clock className="w-2.5 h-2.5" /> Office Hours
               </p>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
-                onClick={() => { setAddingOH(true); setEditingOH(null); }}
-                data-testid={`button-add-oh-${instructor.id}`}
-              >
-                <Plus className="w-3 h-3" />
-              </Button>
+              {!addingOH && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs gap-1"
+                  onClick={() => { setAddingOH(true); setEditingOH(null); }}
+                  data-testid={`button-add-oh-${instructor.id}`}
+                >
+                  <Plus className="w-3 h-3" /> Add
+                </Button>
+              )}
             </div>
 
             {addingOH && (
@@ -314,27 +316,29 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
                       isPending={updateOH.isPending}
                     />
                   ) : (
-                    <div key={oh.id} className="flex items-center gap-1 group">
+                    <div key={oh.id} className="flex items-center gap-1">
                       <Badge variant="secondary" className="text-[10px] flex-1">
                         {oh.dayOfWeek} {oh.startTime?.slice(0, 5)}-{oh.endTime?.slice(0, 5)}
                         {oh.location ? ` @ ${oh.location}` : ""}
                       </Badge>
-                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => { setEditingOH(oh.id); setAddingOH(false); }}
-                          className="p-0.5 text-muted-foreground hover:text-foreground"
-                          data-testid={`button-edit-oh-${oh.id}`}
-                        >
-                          <Pencil className="w-2.5 h-2.5" />
-                        </button>
-                        <button
-                          onClick={() => deleteOH.mutate(oh.id)}
-                          className="p-0.5 text-muted-foreground hover:text-destructive"
-                          data-testid={`button-delete-oh-${oh.id}`}
-                        >
-                          <Trash2 className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 shrink-0 text-muted-foreground"
+                        onClick={() => { setEditingOH(oh.id); setAddingOH(false); }}
+                        data-testid={`button-edit-oh-${oh.id}`}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteOH.mutate(oh.id)}
+                        data-testid={`button-delete-oh-${oh.id}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
                     </div>
                   )
                 ))}
@@ -345,19 +349,21 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-0.5">
+            <div className="flex items-center justify-between mb-1">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                 <BookOpen className="w-2.5 h-2.5" /> Courses ({courses.length})
               </p>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
-                onClick={() => { setAddingCourse(true); setEditingCourse(null); }}
-                data-testid={`button-add-course-${instructor.id}`}
-              >
-                <Plus className="w-3 h-3" />
-              </Button>
+              {!addingCourse && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs gap-1"
+                  onClick={() => { setAddingCourse(true); setEditingCourse(null); }}
+                  data-testid={`button-add-course-${instructor.id}`}
+                >
+                  <Plus className="w-3 h-3" /> Add
+                </Button>
+              )}
             </div>
 
             {addingCourse && (
@@ -389,7 +395,7 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
                       isPending={updateCourse.isPending}
                     />
                   ) : (
-                    <div key={course.id} className="flex items-start gap-1 group text-[11px]">
+                    <div key={course.id} className="flex items-start gap-1 text-[11px]">
                       <div className="flex-1 min-w-0">
                         <span className="font-mono font-bold shrink-0">{course.code}</span>
                         <span className="text-muted-foreground ml-1">
@@ -404,13 +410,15 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
                           {course.enrollment ? <span className="ml-1">({course.enrollment})</span> : null}
                         </span>
                       </div>
-                      <button
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 shrink-0 text-muted-foreground mt-0.5"
                         onClick={() => { setEditingCourse(course.id); setAddingCourse(false); }}
-                        className="p-0.5 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5"
                         data-testid={`button-edit-course-${course.id}`}
                       >
-                        <Pencil className="w-2.5 h-2.5" />
-                      </button>
+                        <Pencil className="w-3 h-3" />
+                      </Button>
                     </div>
                   )
                 ))}
