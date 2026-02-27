@@ -214,8 +214,6 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const hasDetail = courses.length > 0 || officeHours.length > 0 || !!(instructor.bio || instructor.notes) || !!instructor.email;
-
   return (
     <div className="w-full">
       <Button
