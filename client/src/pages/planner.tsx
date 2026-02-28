@@ -680,16 +680,25 @@ export default function Planner() {
                             >
                               {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
                             </Button>
-                            {meeting.status !== "completed" && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => updateStatusMutation.mutate({ id: meeting.id, status: "completed" })}
-                                data-testid={`button-complete-meeting-${meeting.id}`}
-                              >
-                                <Check className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => updateStatusMutation.mutate({
+                                    id: meeting.id,
+                                    status: meeting.status === "completed" ? "planned" : "completed",
+                                  })}
+                                  className={meeting.status === "completed" ? "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20" : ""}
+                                  data-testid={`button-complete-meeting-${meeting.id}`}
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                {meeting.status === "completed" ? "Mark as planned" : "Mark as completed"}
+                              </TooltipContent>
+                            </Tooltip>
                             <Button
                               size="icon"
                               variant="ghost"
