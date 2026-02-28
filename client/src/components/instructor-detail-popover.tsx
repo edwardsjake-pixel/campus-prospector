@@ -17,6 +17,7 @@ interface InstructorDetailProps {
   courses?: Course[];
   officeHours?: OfficeHour[];
   hubspotUrl?: string | null;
+  defaultExpanded?: boolean;
 }
 
 interface OfficeHourFormData {
@@ -30,6 +31,9 @@ interface OfficeHourFormData {
 interface CourseFormData {
   code: string;
   name: string;
+  term: string;
+  format: string;
+  enrollment: number;
   daysOfWeek: string;
   lectureStartTime: string;
   lectureEndTime: string;
@@ -38,7 +42,7 @@ interface CourseFormData {
 }
 
 const DEFAULT_OH: OfficeHourFormData = { dayOfWeek: "Monday", startTime: "09:00", endTime: "10:00", location: "", isVirtual: false };
-const DEFAULT_COURSE: CourseFormData = { code: "", name: "", daysOfWeek: "", lectureStartTime: "", lectureEndTime: "", building: "", room: "" };
+const DEFAULT_COURSE: CourseFormData = { code: "", name: "", term: "", format: "in-person", enrollment: 0, daysOfWeek: "", lectureStartTime: "", lectureEndTime: "", building: "", room: "" };
 
 function OfficeHourForm({ initial, onSave, onCancel, isPending }: {
   initial: OfficeHourFormData;
@@ -124,6 +128,20 @@ function CourseForm({ initial, onSave, onCancel, isPending }: {
         <Input placeholder="Code (e.g. CS101)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className={`h-7 text-xs ${!hasCode && form.code !== initial.code ? "border-destructive" : ""}`} data-testid="input-course-code" />
         <Input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={`h-7 text-xs ${!hasName && form.name !== initial.name ? "border-destructive" : ""}`} data-testid="input-course-name" />
       </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        <Input placeholder="Term (e.g. Fall 2024)" value={form.term} onChange={(e) => setForm({ ...form, term: e.target.value })} className="h-7 text-xs" data-testid="input-course-term" />
+        <Select value={form.format} onValueChange={(v) => setForm({ ...form, format: v })}>
+          <SelectTrigger className="h-7 text-xs" data-testid="select-course-format">
+            <SelectValue placeholder="Format" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="in-person">In Person</SelectItem>
+            <SelectItem value="online">Online</SelectItem>
+            <SelectItem value="hybrid">Hybrid</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input type="number" placeholder="Enrollment" value={form.enrollment || ""} onChange={(e) => setForm({ ...form, enrollment: Number(e.target.value) || 0 })} className="h-7 text-xs" data-testid="input-course-enrollment" />
+      </div>
       <div className="flex flex-wrap gap-0.5">
         {DAYS_OF_WEEK.map(d => (
           <button
@@ -168,8 +186,8 @@ function invalidateCaches() {
   queryClient.invalidateQueries({ queryKey: ["/api/course-instructors"] });
 }
 
-export function InstructorDetailToggle({ instructor, courses = [], officeHours = [], hubspotUrl }: InstructorDetailProps) {
-  const [expanded, setExpanded] = useState(false);
+export function InstructorDetailToggle({ instructor, courses = [], officeHours = [], hubspotUrl, defaultExpanded = false }: InstructorDetailProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [addingOH, setAddingOH] = useState(false);
   const [editingOH, setEditingOH] = useState<number | null>(null);
   const [addingCourse, setAddingCourse] = useState(false);
@@ -216,16 +234,18 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
 
   return (
     <div className="w-full">
-      <Button
-        size="sm"
-        variant="ghost"
-        className="text-[10px] text-muted-foreground"
-        onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-        data-testid={`button-detail-toggle-${instructor.id}`}
-      >
-        {expanded ? <ChevronUp className="w-3 h-3 mr-0.5" /> : <ChevronDown className="w-3 h-3 mr-0.5" />}
-        {expanded ? "Less" : "Details"}
-      </Button>
+      {!defaultExpanded && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-[10px] text-muted-foreground"
+          onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+          data-testid={`button-detail-toggle-${instructor.id}`}
+        >
+          {expanded ? <ChevronUp className="w-3 h-3 mr-0.5" /> : <ChevronDown className="w-3 h-3 mr-0.5" />}
+          {expanded ? "Less" : "Details"}
+        </Button>
+      )}
 
       {expanded && (
         <div
@@ -382,6 +402,9 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
                       initial={{
                         code: course.code || "",
                         name: course.name || "",
+                        term: course.term || "",
+                        format: course.format || "in-person",
+                        enrollment: course.enrollment || 0,
                         daysOfWeek: course.daysOfWeek || "",
                         lectureStartTime: course.lectureStartTime?.slice(0, 5) || "",
                         lectureEndTime: course.lectureEndTime?.slice(0, 5) || "",
@@ -398,6 +421,9 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
                         <span className="font-mono font-bold shrink-0">{course.code}</span>
                         <span className="text-muted-foreground ml-1">
                           {course.name}
+                          {course.format && course.format !== "in-person" && (
+                            <span className="ml-1 capitalize">({course.format})</span>
+                          )}
                           {course.daysOfWeek && course.lectureStartTime && course.lectureEndTime && (
                             <span className="ml-1">
                               {course.daysOfWeek.split(",").map(d => d.trim().slice(0, 3)).join("/")}

@@ -58,6 +58,7 @@ import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { InstructorDetailToggle } from "@/components/instructor-detail-popover";
 
 function InstructorForm({ 
   defaultValues, 
@@ -1310,21 +1311,15 @@ export default function Instructors() {
                                 </div>
                               )}
 
-                              {officeHours.length > 0 && (
-                                <div>
-                                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
-                                    <Clock className="w-3 h-3" /> Office Hours
-                                  </h4>
-                                  <div className="flex flex-wrap gap-2">
-                                    {officeHours.map((oh: any) => (
-                                      <Badge key={oh.id} variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800">
-                                        {oh.dayOfWeek} {oh.startTime?.slice(0,5)}-{oh.endTime?.slice(0,5)}
-                                        {oh.location ? ` @ ${oh.location}` : ""}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
+                              <InstructorDetailToggle
+                                instructor={instructor}
+                                courses={courses}
+                                officeHours={officeHours}
+                                hubspotUrl={instructorDeals.length > 0 && instructorDeals[0].hubspotContactId && instructor.email
+                                  ? `https://app.hubspot.com/contacts/search?query=${encodeURIComponent(instructor.email)}`
+                                  : null}
+                                defaultExpanded={true}
+                              />
 
                               {instructorDeals.length > 0 && (
                                 <div>
@@ -1377,107 +1372,6 @@ export default function Instructors() {
                                 </div>
                               )}
 
-                              <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                                    <BookOpen className="w-3 h-3" /> Courses ({courses.length})
-                                  </h4>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setCreateCourseForInstructor(instructor.id);
-                                      setIsCreateCourseOpen(true);
-                                    }}
-                                    data-testid={`button-add-course-${instructor.id}`}
-                                  >
-                                    <Plus className="w-3 h-3 mr-1" /> Add Course
-                                  </Button>
-                                </div>
-
-                                {courses.length === 0 ? (
-                                  <p className="text-sm text-muted-foreground">No courses yet.</p>
-                                ) : (
-                                  <div className="border rounded-md overflow-x-auto">
-                                    <Table>
-                                      <TableHeader className="bg-muted/50">
-                                        <TableRow>
-                                          <TableHead className="text-xs">Code</TableHead>
-                                          <TableHead className="text-xs">Name</TableHead>
-                                          <TableHead className="text-xs hidden md:table-cell">Format</TableHead>
-                                          <TableHead className="text-xs hidden md:table-cell">Schedule</TableHead>
-                                          <TableHead className="text-xs hidden md:table-cell">Enrollment</TableHead>
-                                          <TableHead className="text-xs text-right">Actions</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {courses.map((course: any) => (
-                                          <TableRow key={course.id} data-testid={`row-course-${course.id}`}>
-                                            <TableCell className="font-mono text-xs font-bold text-slate-600">
-                                              {course.code}
-                                            </TableCell>
-                                            <TableCell className="text-sm">{course.name}</TableCell>
-                                            <TableCell className="hidden md:table-cell">
-                                              <div className="flex items-center gap-1 text-xs">
-                                                {course.format === 'online' ? (
-                                                  <Monitor className="w-3 h-3 text-blue-500" />
-                                                ) : (
-                                                  <Users className="w-3 h-3 text-slate-500" />
-                                                )}
-                                                <span className="capitalize">{course.format}</span>
-                                              </div>
-                                            </TableCell>
-                                            <TableCell className="hidden md:table-cell">
-                                              {course.daysOfWeek ? (
-                                                <div className="text-xs text-slate-600">
-                                                  <span className="font-medium">{course.daysOfWeek.split(",").map((d: string) => d.trim().slice(0, 3)).join("/")}</span>
-                                                  {course.lectureStartTime && course.lectureEndTime && (
-                                                    <span className="text-muted-foreground ml-1">
-                                                      {course.lectureStartTime.slice(0, 5)}-{course.lectureEndTime.slice(0, 5)}
-                                                    </span>
-                                                  )}
-                                                  {course.building && (
-                                                    <span className="text-muted-foreground ml-1">
-                                                      {course.building}{course.room ? ` ${course.room}` : ""}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              ) : (
-                                                <span className="text-xs text-muted-foreground">--</span>
-                                              )}
-                                            </TableCell>
-                                            <TableCell className="hidden md:table-cell">
-                                              <Badge variant={course.enrollment && course.enrollment > 100 ? "default" : "secondary"}>
-                                                {course.enrollment || 0}
-                                              </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                              <div className="flex items-center justify-end gap-1">
-                                                <Button
-                                                  size="icon"
-                                                  variant="ghost"
-                                                  onClick={() => setEditingCourse(course)}
-                                                  data-testid={`button-edit-course-${course.id}`}
-                                                >
-                                                  <Pencil className="w-3.5 h-3.5" />
-                                                </Button>
-                                                <Button
-                                                  size="icon"
-                                                  variant="ghost"
-                                                  onClick={() => setDeletingCourseId(course.id)}
-                                                  data-testid={`button-delete-course-${course.id}`}
-                                                >
-                                                  <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                                                </Button>
-                                              </div>
-                                            </TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                )}
-                              </div>
                             </div>
                           </TableCell>
                         </TableRow>
