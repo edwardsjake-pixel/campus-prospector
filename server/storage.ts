@@ -95,6 +95,7 @@ export interface IStorage {
   getInstructorByName(name: string): Promise<Instructor | undefined>;
   bulkCreateInstructors(items: { name: string; email?: string | null; institutionName?: string | null; departmentName?: string | null; departmentId?: number | null; officeLocation?: string | null; bio?: string | null; notes?: string | null; targetPriority?: string | null }[]): Promise<{ created: Instructor[]; existing: Instructor[]; updated: Instructor[]; skippedCount: number }>;
   bulkCreateCourses(items: InsertCourse[]): Promise<Course[]>;
+  seedAllData(data: any): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -520,6 +521,150 @@ export class DatabaseStorage implements IStorage {
   async bulkCreateCourses(items: InsertCourse[]): Promise<Course[]> {
     if (items.length === 0) return [];
     return await db.insert(courses).values(items).returning();
+  }
+
+  async seedAllData(data: any): Promise<void> {
+    const idMaps: Record<string, Map<number, number>> = {
+      departments: new Map(),
+      instructors: new Map(),
+      courses: new Map(),
+      visits: new Map(),
+    };
+
+    if (data.departments?.length) {
+      for (const dept of data.departments) {
+        const oldId = dept.id;
+        const [inserted] = await db.insert(departments).values({
+          name: dept.name,
+          institutionId: dept.institution_id,
+        }).returning();
+        idMaps.departments.set(oldId, inserted.id);
+      }
+      console.log(`[seed] ${data.departments.length} departments`);
+    }
+
+    if (data.instructors?.length) {
+      for (const inst of data.instructors) {
+        const oldId = inst.id;
+        const newDeptId = inst.department_id ? idMaps.departments.get(inst.department_id) : null;
+        const [inserted] = await db.insert(instructors).values({
+          name: inst.name,
+          email: inst.email,
+          officeLocation: inst.office_location,
+          bio: inst.bio,
+          notes: inst.notes,
+          targetPriority: inst.target_priority || "medium",
+          departmentId: newDeptId || null,
+        }).returning();
+        idMaps.instructors.set(oldId, inserted.id);
+      }
+      console.log(`[seed] ${data.instructors.length} instructors`);
+    }
+
+    if (data.courses?.length) {
+      for (const c of data.courses) {
+        const oldId = c.id;
+        const newDeptId = c.department_id ? idMaps.departments.get(c.department_id) : null;
+        const [inserted] = await db.insert(courses).values({
+          code: c.code,
+          name: c.name,
+          term: c.term,
+          format: c.format,
+          enrollment: c.enrollment,
+          departmentId: newDeptId || null,
+          daysOfWeek: c.days_of_week,
+          lectureStartTime: c.lecture_start_time,
+          lectureEndTime: c.lecture_end_time,
+          building: c.building,
+          room: c.room,
+        }).returning();
+        idMaps.courses.set(oldId, inserted.id);
+      }
+      console.log(`[seed] ${data.courses.length} courses`);
+    }
+
+    if (data.course_instructors?.length) {
+      for (const ci of data.course_instructors) {
+        const newCourseId = idMaps.courses.get(ci.course_id);
+        const newInstructorId = idMaps.instructors.get(ci.instructor_id);
+        if (newCourseId && newInstructorId) {
+          await db.insert(courseInstructors).values({
+            courseId: newCourseId,
+            instructorId: newInstructorId,
+            role: ci.role || "primary",
+          });
+        }
+      }
+      console.log(`[seed] ${data.course_instructors.length} course_instructors`);
+    }
+
+    if (data.office_hours?.length) {
+      for (const oh of data.office_hours) {
+        const newInstructorId = idMaps.instructors.get(oh.instructor_id);
+        if (newInstructorId) {
+          await db.insert(officeHours).values({
+            instructorId: newInstructorId,
+            dayOfWeek: oh.day_of_week,
+            startTime: oh.start_time,
+            endTime: oh.end_time,
+            location: oh.location,
+            isVirtual: oh.is_virtual,
+          });
+        }
+      }
+      console.log(`[seed] ${data.office_hours.length} office_hours`);
+    }
+
+    if (data.deals?.length) {
+      for (const d of data.deals) {
+        const newInstructorId = d.instructor_id ? idMaps.instructors.get(d.instructor_id) : null;
+        const newCourseId = d.course_id ? idMaps.courses.get(d.course_id) : null;
+        await db.insert(deals).values({
+          hubspotDealId: d.hubspot_deal_id,
+          dealName: d.deal_name,
+          stage: d.stage,
+          amount: d.amount,
+          closeDate: d.close_date,
+          pipeline: d.pipeline,
+          instructorId: newInstructorId || null,
+          courseId: newCourseId || null,
+        });
+      }
+      console.log(`[seed] ${data.deals.length} deals`);
+    }
+
+    if (data.visits?.length) {
+      for (const v of data.visits) {
+        const oldId = v.id;
+        const [inserted] = await db.insert(visits).values({
+          userId: v.user_id,
+          date: v.date,
+          location: v.location,
+          notes: v.notes,
+        }).returning();
+        idMaps.visits.set(oldId, inserted.id);
+      }
+      console.log(`[seed] ${data.visits.length} visits`);
+    }
+
+    if (data.planned_meetings?.length) {
+      for (const pm of data.planned_meetings) {
+        const newInstructorId = pm.instructor_id ? idMaps.instructors.get(pm.instructor_id) : null;
+        await db.insert(plannedMeetings).values({
+          userId: pm.user_id,
+          instructorId: newInstructorId || null,
+          date: pm.date,
+          startTime: pm.start_time,
+          endTime: pm.end_time,
+          location: pm.location,
+          purpose: pm.purpose,
+          status: pm.status,
+          meetingType: pm.meeting_type,
+          notes: pm.notes,
+        });
+      }
+      console.log(`[seed] ${data.planned_meetings.length} planned_meetings`);
+    }
   }
 }
 

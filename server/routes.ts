@@ -825,6 +825,12 @@ export async function registerRoutes(
     }
   });
 
+  // Startup diagnostics
+  const startupInstructors = await storage.getInstructors();
+  const dbUrl = process.env.DATABASE_URL || "NOT SET";
+  const dbHost = dbUrl.includes("@") ? dbUrl.split("@")[1]?.split("/")[0] : "unknown";
+  console.log(`[startup] DATABASE_URL host: ${dbHost}, instructors in DB: ${startupInstructors.length}`);
+
   // Seed institutions from JSON data
   const existingInstitutions = await storage.getInstitutions();
   if (existingInstitutions.length === 0) {
@@ -838,6 +844,24 @@ export async function registerRoutes(
       console.log(`Seeded ${count} R1/R2 institutions`);
     } catch (e) {
       console.error("Failed to seed institutions:", e);
+    }
+  }
+
+  // Seed all data if instructors table is empty (e.g., fresh production database)
+  if (startupInstructors.length === 0) {
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const seedPath = path.join(process.cwd(), "shared/data/seed-data.json");
+      if (fs.existsSync(seedPath)) {
+        console.log("[startup] Empty database detected, seeding from seed-data.json...");
+        const seedRaw = fs.readFileSync(seedPath, "utf-8");
+        const seedData = JSON.parse(seedRaw);
+        await storage.seedAllData(seedData);
+        console.log("[startup] Database seeding complete");
+      }
+    } catch (e) {
+      console.error("[startup] Failed to seed data:", e);
     }
   }
 
