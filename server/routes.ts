@@ -57,6 +57,7 @@ export async function registerRoutes(
       search: req.query.search as string,
     };
     const instructors = await storage.getInstructors(filters);
+    console.log(`[instructors] returning ${instructors.length} instructors (filters: ${JSON.stringify(filters)})`);
     res.json(instructors);
   });
 
