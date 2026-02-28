@@ -781,7 +781,11 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 }
 
 export default function Instructors() {
-  const { data: instructors, isLoading } = useInstructors();
+  const { data: instructors, isLoading, error: instructorsError } = useInstructors();
+  if (instructorsError) {
+    console.error("[instructors page] query error:", instructorsError);
+  }
+  console.log("[instructors page] data count:", instructors?.length, "isLoading:", isLoading, "error:", instructorsError?.message);
   const { data: allCourses } = useCourses();
   const { data: allDeals } = useQuery<Deal[]>({ queryKey: ["/api/deals"] });
   const { data: dealStageLabels } = useQuery<Record<string, string>>({ queryKey: ["/api/hubspot/deal-stages"] });
@@ -1165,9 +1169,17 @@ export default function Instructors() {
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Loading faculty...</TableCell>
                 </TableRow>
+              ) : instructorsError ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8 text-red-500" data-testid="text-instructors-error">
+                    Error loading instructors: {instructorsError.message}
+                  </TableCell>
+                </TableRow>
               ) : filteredInstructors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground" data-testid="text-no-instructors">No instructors found.</TableCell>
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground" data-testid="text-no-instructors">
+                    No instructors found. {!instructors ? "(Data not loaded)" : `(${instructors.length} total, filtered to 0)`}
+                  </TableCell>
                 </TableRow>
               ) : (
                 filteredInstructors.map((instructor) => {
