@@ -524,6 +524,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async seedAllData(data: any): Promise<void> {
+    await db.delete(plannedMeetings);
+    await db.delete(visitInteractions);
+    await db.delete(visits);
+    await db.delete(deals);
+    await db.delete(officeHours);
+    await db.delete(courseInstructors);
+    await db.delete(courses);
+    await db.delete(instructors);
+    await db.delete(departments);
+    console.log("[seed] Cleared existing data for clean seed");
+
     const idMaps: Record<string, Map<number, number>> = {
       departments: new Map(),
       instructors: new Map(),
@@ -532,11 +543,40 @@ export class DatabaseStorage implements IStorage {
     };
 
     if (data.departments?.length) {
+      const allInsts = await db.select().from(institutions);
+      const instById = new Map(allInsts.map(i => [i.id, i]));
+      const instByName = new Map(allInsts.map(i => [i.name, i]));
+      const instIdMap = new Map<number, number>();
+
       for (const dept of data.departments) {
         const oldId = dept.id;
+        let targetInstId = dept.institution_id;
+
+        if (!instById.has(targetInstId)) {
+          const instName = data._institutionNames?.[String(targetInstId)];
+          if (instName) {
+            const existing = instByName.get(instName);
+            if (existing) {
+              targetInstId = existing.id;
+            } else {
+              const [newInst] = await db.insert(institutions).values({
+                name: instName,
+                city: "",
+                state: "",
+                control: "Public",
+                classification: "R1",
+                domain: "",
+              }).returning();
+              instById.set(newInst.id, newInst);
+              instByName.set(newInst.name, newInst);
+              targetInstId = newInst.id;
+            }
+          }
+        }
+
         const [inserted] = await db.insert(departments).values({
           name: dept.name,
-          institutionId: dept.institution_id,
+          institutionId: targetInstId,
         }).returning();
         idMaps.departments.set(oldId, inserted.id);
       }
