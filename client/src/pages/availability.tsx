@@ -411,156 +411,244 @@ export default function Availability() {
                 <p className="text-sm">Try a different day, adjust filters, or enable "Show all instructors"</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <div className="min-w-[900px]">
-                  <div className="flex border-b bg-muted/30">
-                    <div className="w-44 md:w-56 shrink-0 px-3 md:px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r sticky left-0 z-10 bg-muted/30">
-                      Instructor
-                    </div>
-                    <div className="flex-1 relative">
-                      <div className="flex">
-                        {hours.map(h => {
-                          const label = h > 12 ? `${h - 12}p` : h === 12 ? "12p" : `${h}a`;
-                          return (
-                            <div
-                              key={h}
-                              className="flex-1 text-center text-[10px] text-muted-foreground py-2 border-r border-dashed border-muted-foreground/15 last:border-r-0"
-                            >
-                              {label}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
+              <>
+                {/* Mobile card layout */}
+                <div className="md:hidden divide-y">
                   {filteredRows.map((row) => {
-                    const availWindows = computeAvailableWindows(row.officeHours, row.lectures);
                     const hasSchedule = row.officeHours.length > 0 || row.lectures.length > 0;
-
                     return (
                       <div
                         key={row.instructor.id}
-                        className={`flex border-b last:border-b-0 hover-elevate ${!hasSchedule ? "opacity-60" : ""}`}
+                        className={`p-4 ${!hasSchedule ? "opacity-60" : ""}`}
                         data-testid={`row-instructor-${row.instructor.id}`}
                       >
-                        <div className="w-44 md:w-56 shrink-0 px-3 md:px-4 py-3 border-r flex items-start gap-2 sticky left-0 z-10 bg-background">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate" data-testid={`text-instructor-name-${row.instructor.id}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-sm" data-testid={`text-instructor-name-${row.instructor.id}`}>
                               {row.instructor.name}
                             </p>
                             {(row.instructor as any).department?.institution?.name && (
-                              <span className="text-[11px] text-muted-foreground truncate block">
+                              <p className="text-xs text-muted-foreground">
                                 {(row.instructor as any).department.institution.name}
-                              </span>
+                              </p>
                             )}
                             {(row.instructor as any).department?.name && (
-                              <span className="text-[10px] text-muted-foreground truncate block">{(row.instructor as any).department.name}</span>
+                              <p className="text-xs text-muted-foreground">{(row.instructor as any).department.name}</p>
                             )}
                             {(() => {
                               const bldg = (row.courses || []).find((c: any) => c.building)?.building || null;
                               const parts = [bldg, row.instructor.officeLocation].filter(Boolean);
                               return parts.length > 0 ? (
-                                <div className="flex items-center gap-0.5 mt-0.5">
-                                  <MapPin className="w-2.5 h-2.5 text-muted-foreground" />
-                                  <span className="text-[10px] text-muted-foreground truncate">{parts.join(", ")}</span>
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  <MapPin className="w-3 h-3 text-muted-foreground" />
+                                  <span className="text-xs text-muted-foreground">{parts.join(", ")}</span>
                                 </div>
                               ) : null;
                             })()}
-                            <InstructorDetailToggle
-                              instructor={row.instructor}
-                              courses={row.courses || []}
-                              officeHours={row.allOfficeHours || row.officeHours}
-                              hubspotUrl={(() => {
-                                const instDeals = dealsByInstructor.get(row.instructor.id) || [];
-                                return instDeals.length > 0 && instDeals[0].hubspotContactId && row.instructor.email
-                                  ? `https://app.hubspot.com/contacts/search?query=${encodeURIComponent(row.instructor.email)}`
-                                  : null;
-                              })()}
-                            />
                           </div>
                           {hasSchedule && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => handleQuickAdd(row)}
-                                  disabled={quickAddMutation.isPending}
-                                  data-testid={`button-add-to-plan-${row.instructor.id}`}
-                                >
-                                  <CalendarPlus className="w-4 h-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Add to today's plan</TooltipContent>
-                            </Tooltip>
-                          )}
-                        </div>
-
-                        <div className="flex-1 relative h-16">
-                          {hours.map(h => (
-                            <div
-                              key={h}
-                              className="absolute top-0 bottom-0 border-r border-dashed border-muted-foreground/10"
-                              style={{ left: `${((h - HOUR_START) / TOTAL_HOURS) * 100}%` }}
-                            />
-                          ))}
-
-                          {!hasSchedule && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="text-xs text-muted-foreground">No schedule data</span>
-                            </div>
-                          )}
-
-                          {availWindows.map((w, i) => (
-                            <TimeBlock
-                              key={`avail-${i}`}
-                              startMin={w.start}
-                              endMin={w.end}
-                              label="Likely available"
-                              variant="available"
-                              lane="full"
-                            />
-                          ))}
-
-                          {row.officeHours.map(oh => (
-                            <TimeBlock
-                              key={`oh-${oh.id}`}
-                              startMin={timeToMinutes(oh.startTime)}
-                              endMin={timeToMinutes(oh.endTime)}
-                              label={`Office Hrs${oh.location ? ` - ${oh.location}` : ""}`}
-                              sublabel={`${formatTime(oh.startTime)} - ${formatTime(oh.endTime)}${oh.location ? ` · ${oh.location}` : ""}`}
-                              variant="office"
-                              lane="top"
-                            />
-                          ))}
-
-                          {row.lectures.map(lec => (
-                            <TimeBlock
-                              key={`lec-${lec.id}`}
-                              startMin={timeToMinutes(lec.startTime)}
-                              endMin={timeToMinutes(lec.endTime)}
-                              label={`${lec.code}${lec.building ? ` - ${lec.building}` : ""}${lec.room ? ` ${lec.room}` : ""}`}
-                              sublabel={`${lec.name} · ${formatTime(lec.startTime)} - ${formatTime(lec.endTime)}${lec.building ? ` · ${lec.building}` : ""}${lec.room ? ` ${lec.room}` : ""}`}
-                              variant="lecture"
-                              lane="bottom"
-                            />
-                          ))}
-
-                          {isToday && nowPosition >= 0 && nowPosition <= 100 && (
-                            <div
-                              className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
-                              style={{ left: `${nowPosition}%` }}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleQuickAdd(row)}
+                              disabled={quickAddMutation.isPending}
+                              className="shrink-0"
+                              data-testid={`button-add-to-plan-${row.instructor.id}`}
                             >
-                              <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500" />
-                            </div>
+                              <CalendarPlus className="w-4 h-4 mr-1" />
+                              Plan
+                            </Button>
                           )}
                         </div>
+
+                        {hasSchedule && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {row.officeHours.map(oh => (
+                              <Badge key={`oh-${oh.id}`} variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 text-xs">
+                                Office {formatTime(oh.startTime)}-{formatTime(oh.endTime)}
+                                {oh.location ? ` · ${oh.location}` : ""}
+                              </Badge>
+                            ))}
+                            {row.lectures.map(lec => (
+                              <Badge key={`lec-${lec.id}`} variant="outline" className="bg-indigo-50 border-indigo-200 text-indigo-700 text-xs">
+                                {lec.code} {formatTime(lec.startTime)}-{formatTime(lec.endTime)}
+                                {lec.building ? ` · ${lec.building}` : ""}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        {!hasSchedule && (
+                          <p className="text-xs text-muted-foreground mt-1">No schedule data</p>
+                        )}
+
+                        <InstructorDetailToggle
+                          instructor={row.instructor}
+                          courses={row.courses || []}
+                          officeHours={row.allOfficeHours || row.officeHours}
+                          hubspotUrl={(() => {
+                            const instDeals = dealsByInstructor.get(row.instructor.id) || [];
+                            return instDeals.length > 0 && instDeals[0].hubspotContactId && row.instructor.email
+                              ? `https://app.hubspot.com/contacts/search?query=${encodeURIComponent(row.instructor.email)}`
+                              : null;
+                          })()}
+                        />
                       </div>
                     );
                   })}
                 </div>
-              </div>
+
+                {/* Desktop timeline layout */}
+                <div className="hidden md:block overflow-x-auto">
+                  <div className="min-w-[900px]">
+                    <div className="flex border-b bg-muted/30">
+                      <div className="w-56 shrink-0 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-r sticky left-0 z-10 bg-muted/30">
+                        Instructor
+                      </div>
+                      <div className="flex-1 relative">
+                        <div className="flex">
+                          {hours.map(h => {
+                            const label = h > 12 ? `${h - 12}p` : h === 12 ? "12p" : `${h}a`;
+                            return (
+                              <div
+                                key={h}
+                                className="flex-1 text-center text-[10px] text-muted-foreground py-2 border-r border-dashed border-muted-foreground/15 last:border-r-0"
+                              >
+                                {label}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {filteredRows.map((row) => {
+                      const availWindows = computeAvailableWindows(row.officeHours, row.lectures);
+                      const hasSchedule = row.officeHours.length > 0 || row.lectures.length > 0;
+
+                      return (
+                        <div
+                          key={row.instructor.id}
+                          className={`flex border-b last:border-b-0 hover-elevate ${!hasSchedule ? "opacity-60" : ""}`}
+                          data-testid={`row-instructor-desktop-${row.instructor.id}`}
+                        >
+                          <div className="w-56 shrink-0 px-4 py-3 border-r flex items-start gap-2 sticky left-0 z-10 bg-background">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate" data-testid={`text-instructor-name-${row.instructor.id}`}>
+                                {row.instructor.name}
+                              </p>
+                              {(row.instructor as any).department?.institution?.name && (
+                                <span className="text-[11px] text-muted-foreground truncate block">
+                                  {(row.instructor as any).department.institution.name}
+                                </span>
+                              )}
+                              {(row.instructor as any).department?.name && (
+                                <span className="text-[10px] text-muted-foreground truncate block">{(row.instructor as any).department.name}</span>
+                              )}
+                              {(() => {
+                                const bldg = (row.courses || []).find((c: any) => c.building)?.building || null;
+                                const parts = [bldg, row.instructor.officeLocation].filter(Boolean);
+                                return parts.length > 0 ? (
+                                  <div className="flex items-center gap-0.5 mt-0.5">
+                                    <MapPin className="w-2.5 h-2.5 text-muted-foreground" />
+                                    <span className="text-[10px] text-muted-foreground truncate">{parts.join(", ")}</span>
+                                  </div>
+                                ) : null;
+                              })()}
+                              <InstructorDetailToggle
+                                instructor={row.instructor}
+                                courses={row.courses || []}
+                                officeHours={row.allOfficeHours || row.officeHours}
+                                hubspotUrl={(() => {
+                                  const instDeals = dealsByInstructor.get(row.instructor.id) || [];
+                                  return instDeals.length > 0 && instDeals[0].hubspotContactId && row.instructor.email
+                                    ? `https://app.hubspot.com/contacts/search?query=${encodeURIComponent(row.instructor.email)}`
+                                    : null;
+                                })()}
+                              />
+                            </div>
+                            {hasSchedule && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleQuickAdd(row)}
+                                    disabled={quickAddMutation.isPending}
+                                    data-testid={`button-add-to-plan-${row.instructor.id}`}
+                                  >
+                                    <CalendarPlus className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Add to today's plan</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+
+                          <div className="flex-1 relative h-16">
+                            {hours.map(h => (
+                              <div
+                                key={h}
+                                className="absolute top-0 bottom-0 border-r border-dashed border-muted-foreground/10"
+                                style={{ left: `${((h - HOUR_START) / TOTAL_HOURS) * 100}%` }}
+                              />
+                            ))}
+
+                            {!hasSchedule && (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-xs text-muted-foreground">No schedule data</span>
+                              </div>
+                            )}
+
+                            {availWindows.map((w, i) => (
+                              <TimeBlock
+                                key={`avail-${i}`}
+                                startMin={w.start}
+                                endMin={w.end}
+                                label="Likely available"
+                                variant="available"
+                                lane="full"
+                              />
+                            ))}
+
+                            {row.officeHours.map(oh => (
+                              <TimeBlock
+                                key={`oh-${oh.id}`}
+                                startMin={timeToMinutes(oh.startTime)}
+                                endMin={timeToMinutes(oh.endTime)}
+                                label={`Office Hrs${oh.location ? ` - ${oh.location}` : ""}`}
+                                sublabel={`${formatTime(oh.startTime)} - ${formatTime(oh.endTime)}${oh.location ? ` · ${oh.location}` : ""}`}
+                                variant="office"
+                                lane="top"
+                              />
+                            ))}
+
+                            {row.lectures.map(lec => (
+                              <TimeBlock
+                                key={`lec-${lec.id}`}
+                                startMin={timeToMinutes(lec.startTime)}
+                                endMin={timeToMinutes(lec.endTime)}
+                                label={`${lec.code}${lec.building ? ` - ${lec.building}` : ""}${lec.room ? ` ${lec.room}` : ""}`}
+                                sublabel={`${lec.name} · ${formatTime(lec.startTime)} - ${formatTime(lec.endTime)}${lec.building ? ` · ${lec.building}` : ""}${lec.room ? ` ${lec.room}` : ""}`}
+                                variant="lecture"
+                                lane="bottom"
+                              />
+                            ))}
+
+                            {isToday && nowPosition >= 0 && nowPosition <= 100 && (
+                              <div
+                                className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
+                                style={{ left: `${nowPosition}%` }}
+                              >
+                                <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
