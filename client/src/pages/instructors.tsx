@@ -1,6 +1,9 @@
 import { Layout } from "@/components/layout";
 import { useInstructors, useCreateInstructor, useUpdateInstructor, useDeleteInstructor } from "@/hooks/use-instructors";
 import { useCourses, useCreateCourse, useUpdateCourse, useDeleteCourse } from "@/hooks/use-courses";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { 
   Table, 
   TableBody, 
@@ -41,7 +44,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   Plus, Search, MapPin, Mail, Building2, Pencil, Trash2, Filter, 
-  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2, Download, Check, X, Globe, ExternalLink
+  ChevronDown, ChevronRight, BookOpen, Clock, Monitor, Users, RefreshCw, DollarSign, Loader2, Download, Check, X, Globe, ExternalLink, ChevronsUpDown
 } from "lucide-react";
 import { SiHubspot } from "react-icons/si";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,7 +52,7 @@ import { CsvImport } from "@/components/csv-import";
 import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
 import { useForm } from "react-hook-form";
 import { InsertInstructor, InsertCourse } from "@shared/schema";
-import type { Deal } from "@shared/schema";
+import type { Deal, DepartmentWithInstitution } from "@shared/schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertInstructorSchema, insertCourseSchema } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
@@ -65,18 +68,21 @@ function InstructorForm({
   onSubmit, 
   isPending, 
   submitLabel,
-  onCancel 
+  onCancel,
+  departments,
 }: { 
   defaultValues: InsertInstructor;
   onSubmit: (data: InsertInstructor) => void;
   isPending: boolean;
   submitLabel: string;
   onCancel: () => void;
+  departments?: DepartmentWithInstitution[];
 }) {
   const form = useForm<InsertInstructor>({
     resolver: zodResolver(insertInstructorSchema),
     defaultValues,
   });
+  const [deptOpen, setDeptOpen] = useState(false);
 
   useEffect(() => {
     form.reset(defaultValues);
@@ -136,14 +142,64 @@ function InstructorForm({
         <FormField
           control={form.control}
           name="departmentId"
-          render={({ field }) => (
-            <FormItem>
-              <Label>Department</Label>
-              <FormControl><Input type="hidden" {...field} value={field.value || ''} /></FormControl>
-              <p className="text-xs text-muted-foreground">Department is set via the institution hierarchy.</p>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            const selectedDept = departments?.find(d => d.id === field.value);
+            return (
+              <FormItem>
+                <Label>Department</Label>
+                {departments && departments.length > 0 ? (
+                  <Popover open={deptOpen} onOpenChange={setDeptOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between font-normal h-9 text-sm"
+                        data-testid="combobox-department"
+                      >
+                        <span className="truncate text-left">
+                          {selectedDept
+                            ? `${selectedDept.name}${selectedDept.institution ? ` — ${selectedDept.institution.name}` : ""}`
+                            : "Select department..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[320px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search department or university..." />
+                        <CommandEmpty>No department found.</CommandEmpty>
+                        <CommandGroup className="max-h-56 overflow-y-auto">
+                          <CommandItem
+                            value="__none__"
+                            onSelect={() => { field.onChange(null); setDeptOpen(false); }}
+                          >
+                            <span className="text-muted-foreground italic text-sm">None</span>
+                          </CommandItem>
+                          {departments.map(dept => (
+                            <CommandItem
+                              key={dept.id}
+                              value={`${dept.name} ${dept.institution?.name || ""}`}
+                              onSelect={() => { field.onChange(dept.id); setDeptOpen(false); }}
+                            >
+                              <Check className={`mr-2 h-4 w-4 flex-shrink-0 ${field.value === dept.id ? "opacity-100" : "opacity-0"}`} />
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium truncate">{dept.name}</div>
+                                {dept.institution && <div className="text-xs text-muted-foreground truncate">{dept.institution.name}</div>}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No departments available. Import instructors to create departments.</p>
+                )}
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <div className="grid grid-cols-2 gap-4">
@@ -781,6 +837,270 @@ function HubSpotImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   );
 }
 
+const EMPTY_COURSE_DEFAULTS: CourseFormData = {
+  name: "",
+  code: "",
+  term: "Fall 2024",
+  format: "in-person",
+  enrollment: 0,
+  daysOfWeek: "",
+  lectureStartTime: "",
+  lectureEndTime: "",
+  building: "",
+  room: "",
+};
+
+function formatCourseSchedule(course: any) {
+  const parts: string[] = [];
+  if (course.daysOfWeek) {
+    parts.push(course.daysOfWeek.split(",").map((d: string) => d.slice(0, 3)).join("/"));
+  }
+  if (course.lectureStartTime && course.lectureEndTime) {
+    const fmt = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      const ampm = h >= 12 ? "PM" : "AM";
+      return `${h % 12 || 12}:${m.toString().padStart(2, "0")} ${ampm}`;
+    };
+    parts.push(`${fmt(course.lectureStartTime)}–${fmt(course.lectureEndTime)}`);
+  }
+  return parts.join(" · ");
+}
+
+function EditInstructorDialog({
+  instructor,
+  departments,
+  allInstructors,
+  onClose,
+  onSaveInfo,
+  isSavePending,
+}: {
+  instructor: any;
+  departments: DepartmentWithInstitution[] | undefined;
+  allInstructors: any[] | undefined;
+  onClose: () => void;
+  onSaveInfo: (data: InsertInstructor) => void;
+  isSavePending: boolean;
+}) {
+  const [activeTab, setActiveTab] = useState("info");
+  const [inlineAddCourse, setInlineAddCourse] = useState(false);
+  const [inlineEditCourseId, setInlineEditCourseId] = useState<number | null>(null);
+  const [confirmDeleteCourseId, setConfirmDeleteCourseId] = useState<number | null>(null);
+  const { toast } = useToast();
+  const createCourse = useCreateCourse();
+  const updateCourse = useUpdateCourse();
+  const deleteCourse = useDeleteCourse();
+
+  const liveCourses: any[] = allInstructors?.find((i: any) => i.id === instructor.id)?.courses || instructor.courses || [];
+
+  const handleAddCourse = (data: CourseFormData, selectedDays: string[]) => {
+    const submitData: CourseFormData = {
+      ...data,
+      instructorId: instructor.id,
+      daysOfWeek: selectedDays.length > 0 ? selectedDays.join(",") : null,
+      lectureStartTime: data.lectureStartTime || null,
+      lectureEndTime: data.lectureEndTime || null,
+      building: data.building || null,
+      room: data.room || null,
+    };
+    createCourse.mutate(submitData, {
+      onSuccess: () => {
+        setInlineAddCourse(false);
+        toast({ title: "Course added" });
+      },
+      onError: () => toast({ title: "Failed to add course", variant: "destructive" }),
+    });
+  };
+
+  const handleUpdateCourse = (data: CourseFormData, selectedDays: string[]) => {
+    if (inlineEditCourseId === null) return;
+    updateCourse.mutate({
+      ...data,
+      id: inlineEditCourseId,
+      daysOfWeek: selectedDays.length > 0 ? selectedDays.join(",") : null,
+      lectureStartTime: data.lectureStartTime || null,
+      lectureEndTime: data.lectureEndTime || null,
+      building: data.building || null,
+      room: data.room || null,
+    }, {
+      onSuccess: () => {
+        setInlineEditCourseId(null);
+        queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
+        toast({ title: "Course updated" });
+      },
+      onError: () => toast({ title: "Failed to update course", variant: "destructive" }),
+    });
+  };
+
+  const handleDeleteCourse = (courseId: number) => {
+    deleteCourse.mutate(courseId, {
+      onSuccess: () => {
+        setConfirmDeleteCourseId(null);
+        queryClient.invalidateQueries({ queryKey: ["/api/instructors"] });
+        toast({ title: "Course removed" });
+      },
+      onError: () => toast({ title: "Failed to remove course", variant: "destructive" }),
+    });
+  };
+
+  return (
+    <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col gap-0 p-0">
+      <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
+        <DialogTitle>Edit Instructor</DialogTitle>
+        <DialogDescription>Update {instructor.name}'s details.</DialogDescription>
+      </DialogHeader>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+        <TabsList className="mx-6 flex-shrink-0">
+          <TabsTrigger value="info" className="flex-1" data-testid="tab-info">Info</TabsTrigger>
+          <TabsTrigger value="courses" className="flex-1" data-testid="tab-courses">
+            Courses
+            {liveCourses.length > 0 && (
+              <span className="ml-1.5 text-xs bg-primary/15 text-primary rounded-full px-1.5 py-0.5 leading-none">{liveCourses.length}</span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="info" className="flex-1 overflow-y-auto px-6 pb-6 mt-0">
+          <InstructorForm
+            defaultValues={{
+              name: instructor.name,
+              email: instructor.email || "",
+              departmentId: instructor.departmentId,
+              officeLocation: instructor.officeLocation || "",
+              bio: instructor.bio || "",
+              notes: instructor.notes || "",
+              targetPriority: instructor.targetPriority || "medium",
+            }}
+            departments={departments}
+            onSubmit={onSaveInfo}
+            isPending={isSavePending}
+            submitLabel="Save Changes"
+            onCancel={onClose}
+          />
+        </TabsContent>
+
+        <TabsContent value="courses" className="flex-1 overflow-y-auto px-6 pb-6 mt-0">
+          <div className="space-y-2 pt-3">
+            {liveCourses.length === 0 && !inlineAddCourse && (
+              <p className="text-sm text-muted-foreground text-center py-8">No courses linked yet.</p>
+            )}
+
+            {liveCourses.map((course: any) => {
+              if (inlineEditCourseId === course.id) {
+                return (
+                  <div key={course.id} className="border rounded-lg p-4 bg-muted/30">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Editing {course.code}</p>
+                    <CourseForm
+                      defaultValues={{
+                        name: course.name,
+                        code: course.code,
+                        term: course.term || "",
+                        format: course.format,
+                        enrollment: course.enrollment || 0,
+                        departmentId: course.departmentId,
+                        lectureStartTime: course.lectureStartTime || "",
+                        lectureEndTime: course.lectureEndTime || "",
+                        building: course.building || "",
+                        room: course.room || "",
+                      }}
+                      selectedDaysDefault={course.daysOfWeek ? course.daysOfWeek.split(",") : []}
+                      onSubmit={handleUpdateCourse}
+                      isPending={updateCourse.isPending}
+                      submitLabel="Update Course"
+                      onCancel={() => setInlineEditCourseId(null)}
+                    />
+                  </div>
+                );
+              }
+
+              if (confirmDeleteCourseId === course.id) {
+                return (
+                  <div key={course.id} className="border border-red-200 rounded-lg p-3 bg-red-50 dark:bg-red-900/10">
+                    <p className="text-sm font-medium text-red-700 dark:text-red-400 mb-2">
+                      Remove <span className="font-semibold">{course.code} — {course.name}</span>?
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDeleteCourse(course.id)}
+                        disabled={deleteCourse.isPending}
+                        data-testid={`button-confirm-delete-course-${course.id}`}
+                      >
+                        Remove
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteCourseId(null)}>Cancel</Button>
+                    </div>
+                  </div>
+                );
+              }
+
+              const schedule = formatCourseSchedule(course);
+              return (
+                <div key={course.id} className="border rounded-lg p-3 flex items-start justify-between gap-2" data-testid={`card-course-edit-${course.id}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{course.code} — {course.name}</p>
+                    {schedule && <p className="text-xs text-muted-foreground mt-0.5">{schedule}</p>}
+                    {course.term && <p className="text-xs text-muted-foreground">{course.term}</p>}
+                    {course.format && (
+                      <Badge variant="outline" className="mt-1 text-xs capitalize">{course.format.replace("-", " ")}</Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => { setInlineEditCourseId(course.id); setConfirmDeleteCourseId(null); }}
+                      data-testid={`button-edit-course-inline-${course.id}`}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => { setConfirmDeleteCourseId(course.id); setInlineEditCourseId(null); }}
+                      data-testid={`button-delete-course-inline-${course.id}`}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {inlineAddCourse && (
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">New Course</p>
+                <CourseForm
+                  defaultValues={EMPTY_COURSE_DEFAULTS}
+                  selectedDaysDefault={[]}
+                  onSubmit={handleAddCourse}
+                  isPending={createCourse.isPending}
+                  submitLabel="Add Course"
+                  onCancel={() => setInlineAddCourse(false)}
+                />
+              </div>
+            )}
+
+            {!inlineAddCourse && (
+              <Button
+                variant="outline"
+                className="w-full"
+                size="sm"
+                onClick={() => { setInlineAddCourse(true); setInlineEditCourseId(null); setConfirmDeleteCourseId(null); }}
+                data-testid="button-add-course-inline"
+              >
+                <Plus className="w-3.5 h-3.5 mr-2" /> Add Course
+              </Button>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </DialogContent>
+  );
+}
+
 export default function Instructors() {
   const { data: instructors, isLoading, error: instructorsError } = useInstructors();
   if (instructorsError) {
@@ -788,6 +1108,7 @@ export default function Instructors() {
   }
   console.log("[instructors page] data count:", instructors?.length, "isLoading:", isLoading, "error:", instructorsError?.message);
   const { data: allCourses } = useCourses();
+  const { data: departments } = useQuery<DepartmentWithInstitution[]>({ queryKey: ["/api/departments"] });
   const { data: allDeals } = useQuery<Deal[]>({ queryKey: ["/api/deals"] });
   const { data: dealStageLabels } = useQuery<Record<string, string>>({ queryKey: ["/api/hubspot/deal-stages"] });
   const [search, setSearch] = useState("");
@@ -1043,18 +1364,6 @@ export default function Instructors() {
     targetPriority: "medium",
   };
 
-  const emptyCourseDefaults: CourseFormData = {
-    name: "",
-    code: "",
-    term: "Fall 2024",
-    format: "in-person",
-    enrollment: 0,
-    daysOfWeek: "",
-    lectureStartTime: "",
-    lectureEndTime: "",
-    building: "",
-    room: "",
-  };
 
   return (
     <Layout>
@@ -1387,29 +1696,16 @@ export default function Instructors() {
       </Card>
 
       <Dialog open={!!editingInstructor} onOpenChange={(open) => { if (!open) setEditingInstructor(null); }}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit Instructor</DialogTitle>
-            <DialogDescription>Update the instructor's details.</DialogDescription>
-          </DialogHeader>
-          {editingInstructor && (
-            <InstructorForm
-              defaultValues={{
-                name: editingInstructor.name,
-                email: editingInstructor.email || "",
-                departmentId: editingInstructor.departmentId,
-                officeLocation: editingInstructor.officeLocation || "",
-                bio: editingInstructor.bio || "",
-                notes: editingInstructor.notes || "",
-                targetPriority: editingInstructor.targetPriority || "medium",
-              }}
-              onSubmit={handleUpdateInstructor}
-              isPending={updateInstructor.isPending}
-              submitLabel="Save Changes"
-              onCancel={() => setEditingInstructor(null)}
-            />
-          )}
-        </DialogContent>
+        {editingInstructor && (
+          <EditInstructorDialog
+            instructor={editingInstructor}
+            departments={departments}
+            allInstructors={instructors}
+            onClose={() => setEditingInstructor(null)}
+            onSaveInfo={handleUpdateInstructor}
+            isSavePending={updateInstructor.isPending}
+          />
+        )}
       </Dialog>
 
       <Dialog open={isCreateCourseOpen} onOpenChange={(open) => { if (!open) { setIsCreateCourseOpen(false); setCreateCourseForInstructor(null); } }}>
@@ -1421,7 +1717,7 @@ export default function Instructors() {
             </DialogDescription>
           </DialogHeader>
           <CourseForm
-            defaultValues={emptyCourseDefaults}
+            defaultValues={EMPTY_COURSE_DEFAULTS}
             selectedDaysDefault={[]}
             onSubmit={handleCreateCourse}
             isPending={createCourse.isPending}
