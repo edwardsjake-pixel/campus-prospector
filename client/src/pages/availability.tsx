@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { MapPin, User, Filter, CalendarPlus, Building2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -204,6 +206,11 @@ export default function Availability() {
 
   const todayDateStr = format(new Date(), "yyyy-MM-dd");
 
+  const [fallbackRow, setFallbackRow] = useState<AvailabilityRow | null>(null);
+  const [fallbackStart, setFallbackStart] = useState("09:00");
+  const [fallbackEnd, setFallbackEnd] = useState("09:30");
+  const [fallbackLocation, setFallbackLocation] = useState("");
+
   const { data: allDeals = [] } = useQuery<Deal[]>({ queryKey: ["/api/deals"] });
   const dealsByInstructor = useMemo(() => {
     const map = new Map<number, Deal[]>();
@@ -254,7 +261,10 @@ export default function Availability() {
   const handleQuickAdd = (row: AvailabilityRow) => {
     const slot = findBestMeetingSlot(row.officeHours, row.lectures);
     if (!slot) {
-      toast({ title: "No available slot", description: "Could not find an available time for this instructor.", variant: "destructive" });
+      setFallbackRow(row);
+      setFallbackStart("09:00");
+      setFallbackEnd("09:30");
+      setFallbackLocation(row.instructor.officeLocation || "");
       return;
     }
     quickAddMutation.mutate({
@@ -263,6 +273,17 @@ export default function Availability() {
       endTime: minutesToTimeStr(slot.end),
       location: slot.location || row.instructor.officeLocation || "",
     });
+  };
+
+  const handleFallbackSubmit = () => {
+    if (!fallbackRow) return;
+    quickAddMutation.mutate({
+      instructorId: fallbackRow.instructor.id,
+      startTime: fallbackStart,
+      endTime: fallbackEnd,
+      location: fallbackLocation,
+    });
+    setFallbackRow(null);
   };
 
   const allInstitutionsQuery = useQuery<{ id: number; name: string; domain: string; state: string; classification: string }[]>({
@@ -440,19 +461,17 @@ export default function Availability() {
                               ) : null;
                             })()}
                           </div>
-                          {hasSchedule && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleQuickAdd(row)}
-                              disabled={quickAddMutation.isPending}
-                              className="shrink-0"
-                              data-testid={`button-add-to-plan-${row.instructor.id}`}
-                            >
-                              <CalendarPlus className="w-4 h-4 mr-1" />
-                              Plan
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQuickAdd(row)}
+                            disabled={quickAddMutation.isPending}
+                            className="shrink-0"
+                            data-testid={`button-add-to-plan-${row.instructor.id}`}
+                          >
+                            <CalendarPlus className="w-4 h-4 mr-1" />
+                            Plan
+                          </Button>
                         </div>
 
                         {hasSchedule && (
@@ -472,7 +491,7 @@ export default function Availability() {
                           </div>
                         )}
                         {!hasSchedule && (
-                          <p className="text-xs text-muted-foreground mt-1">No schedule data</p>
+                          <p className="text-xs text-muted-foreground mt-1">No availability captured — click Plan to schedule a visit</p>
                         )}
 
                         <InstructorDetailToggle
@@ -560,22 +579,20 @@ export default function Availability() {
                                 })()}
                               />
                             </div>
-                            {hasSchedule && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => handleQuickAdd(row)}
-                                    disabled={quickAddMutation.isPending}
-                                    data-testid={`button-add-to-plan-${row.instructor.id}`}
-                                  >
-                                    <CalendarPlus className="w-4 h-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Add to today's plan</TooltipContent>
-                              </Tooltip>
-                            )}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => handleQuickAdd(row)}
+                                  disabled={quickAddMutation.isPending}
+                                  data-testid={`button-add-to-plan-${row.instructor.id}`}
+                                >
+                                  <CalendarPlus className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Add to today's plan</TooltipContent>
+                            </Tooltip>
                           </div>
 
                           <div className="flex-1 relative h-16">
@@ -647,6 +664,64 @@ export default function Availability() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={!!fallbackRow} onOpenChange={(open) => { if (!open) setFallbackRow(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add to Today's Plan</DialogTitle>
+            <DialogDescription>
+              {fallbackRow?.instructor.name} has no captured availability for {selectedDay}. Pick a time to schedule your visit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="fallback-start">Start Time</Label>
+                <Input
+                  id="fallback-start"
+                  type="time"
+                  value={fallbackStart}
+                  onChange={(e) => setFallbackStart(e.target.value)}
+                  data-testid="input-fallback-start"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fallback-end">End Time</Label>
+                <Input
+                  id="fallback-end"
+                  type="time"
+                  value={fallbackEnd}
+                  onChange={(e) => setFallbackEnd(e.target.value)}
+                  data-testid="input-fallback-end"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fallback-location">Location</Label>
+              <Input
+                id="fallback-location"
+                placeholder="Office, building, room..."
+                value={fallbackLocation}
+                onChange={(e) => setFallbackLocation(e.target.value)}
+                data-testid="input-fallback-location"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFallbackRow(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleFallbackSubmit}
+              disabled={quickAddMutation.isPending || !fallbackStart || !fallbackEnd}
+              data-testid="button-fallback-add"
+            >
+              <CalendarPlus className="w-4 h-4 mr-2" />
+              Add to Plan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
