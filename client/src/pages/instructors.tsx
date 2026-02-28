@@ -103,7 +103,7 @@ function InstructorForm({
           )}
         />
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="email"
@@ -165,7 +165,7 @@ function InstructorForm({
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[320px] p-0" align="start">
+                    <PopoverContent className="w-[min(320px,calc(100vw-2rem))] p-0" align="start">
                       <Command>
                         <CommandInput placeholder="Search department or university..." />
                         <CommandEmpty>No department found.</CommandEmpty>
@@ -202,7 +202,7 @@ function InstructorForm({
           }}
         />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="officeLocation"
@@ -284,7 +284,7 @@ function CourseForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 pt-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <FormField
             control={form.control}
             name="code"
@@ -321,7 +321,7 @@ function CourseForm({
           )}
         />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="format"
@@ -381,7 +381,7 @@ function CourseForm({
               );
             })}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="lectureStartTime"
@@ -405,7 +405,7 @@ function CourseForm({
               )}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4 mt-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <FormField
               control={form.control}
               name="building"
@@ -1457,7 +1457,68 @@ export default function Instructors() {
         </Select>
       </div>
 
-      <Card className="border-none shadow-md overflow-hidden">
+      <div className="block sm:hidden space-y-2">
+        {isLoading ? (
+          <p className="text-center py-8 text-muted-foreground">Loading faculty...</p>
+        ) : filteredInstructors.length === 0 ? (
+          <p className="text-center py-8 text-muted-foreground" data-testid="text-no-instructors-mobile">No instructors found.</p>
+        ) : (
+          filteredInstructors.map((instructor) => {
+            const courses = instructor.courses || [];
+            const instructorDeals = dealsByInstructor.get(instructor.id) || [];
+            return (
+              <Card key={instructor.id} className="border shadow-sm" data-testid={`card-instructor-${instructor.id}`}>
+                <CardContent className="p-3 flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="font-semibold text-sm truncate" data-testid={`text-name-mobile-${instructor.id}`}>{instructor.name}</p>
+                    {(instructor as any).department?.name && (
+                      <p className="text-xs text-muted-foreground truncate">{(instructor as any).department.name}</p>
+                    )}
+                    {(instructor as any).department?.institution?.name && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Building2 className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{(instructor as any).department.institution.name}</span>
+                      </div>
+                    )}
+                    {instructor.email && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Mail className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{instructor.email}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 flex-wrap pt-1">
+                      <Badge className={priorityColor(instructor.targetPriority)} variant="outline">
+                        {(instructor.targetPriority || 'medium').toUpperCase()}
+                      </Badge>
+                      {courses.length > 0 && (
+                        <Badge variant="secondary">
+                          <BookOpen className="w-3 h-3 mr-1" />{courses.length}
+                        </Badge>
+                      )}
+                      {instructorDeals.length > 0 && (
+                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800">
+                          <DollarSign className="w-3 h-3 mr-1" />
+                          ${instructorDeals.reduce((s, d) => s + (Number(d.amount) || 0), 0).toLocaleString()}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button size="icon" variant="ghost" onClick={() => setEditingInstructor(instructor)} data-testid={`button-edit-instructor-mobile-${instructor.id}`}>
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => setDeletingId(instructor.id)} data-testid={`button-delete-instructor-mobile-${instructor.id}`}>
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </div>
+
+      <Card className="hidden sm:block border-none shadow-md overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
           <Table>

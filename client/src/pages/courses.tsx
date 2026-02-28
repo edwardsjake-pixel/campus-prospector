@@ -99,7 +99,7 @@ function CourseForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 pt-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <FormField
             control={form.control}
             name="code"
@@ -136,7 +136,7 @@ function CourseForm({
           )}
         />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="format"
@@ -221,7 +221,7 @@ function CourseForm({
               );
             })}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="lectureStartTime"
@@ -245,7 +245,7 @@ function CourseForm({
               )}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4 mt-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <FormField
               control={form.control}
               name="building"
@@ -465,7 +465,60 @@ export default function Courses() {
         </Select>
       </div>
 
-      <Card className="border-none shadow-md overflow-hidden">
+      <div className="block sm:hidden space-y-2">
+        {isLoading ? (
+          <p className="text-center py-8 text-muted-foreground">Loading courses...</p>
+        ) : filteredCourses.length === 0 ? (
+          <p className="text-center py-8 text-muted-foreground" data-testid="text-no-courses-mobile">No courses found.</p>
+        ) : (
+          filteredCourses.map((course) => (
+            <Card key={course.id} className="border shadow-sm" data-testid={`card-course-${course.id}`}>
+              <CardContent className="p-3 flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-xs font-bold text-slate-600" data-testid={`text-code-mobile-${course.id}`}>{course.code}</span>
+                    <Badge variant={course.enrollment && course.enrollment > 100 ? "default" : "secondary"} className="text-xs">
+                      {course.enrollment || 0} Students
+                    </Badge>
+                  </div>
+                  <p className="font-medium text-sm truncate" data-testid={`text-course-name-mobile-${course.id}`}>{course.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{getCourseInstructorNames(course.id)}</p>
+                  {getCourseInstitution(course.id) && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Building2 className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{getCourseInstitution(course.id)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    {course.format === 'online' ? (
+                      <Monitor className="w-3 h-3 text-blue-500" />
+                    ) : (
+                      <Users className="w-3 h-3 text-slate-500" />
+                    )}
+                    <span className="capitalize text-xs text-muted-foreground">{course.format}</span>
+                    {course.daysOfWeek && (
+                      <span className="text-xs text-muted-foreground">
+                        · {course.daysOfWeek.split(",").map((d: string) => d.trim().slice(0, 3)).join("/")}
+                        {course.lectureStartTime && course.lectureEndTime && ` ${formatTime(course.lectureStartTime)}-${formatTime(course.lectureEndTime)}`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button size="icon" variant="ghost" onClick={() => setEditingCourse(course)} data-testid={`button-edit-course-mobile-${course.id}`}>
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => setDeletingId(course.id)} data-testid={`button-delete-course-mobile-${course.id}`}>
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      <Card className="hidden sm:block border-none shadow-md overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
           <Table>

@@ -18,7 +18,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatTime } from "@/lib/utils";
 import { format } from "date-fns";
-import { Plus, Clock, MapPin, Trash2, CalendarDays, Check, GripVertical, ChevronDown, ChevronUp, Mic, Anchor, Zap, FileText, Save, DollarSign } from "lucide-react";
+import { Plus, Clock, MapPin, Trash2, CalendarDays, Check, GripVertical, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Mic, Anchor, Zap, FileText, Save, DollarSign } from "lucide-react";
 import type { PlannedMeeting, Instructor, OfficeHour, Course, Deal } from "@shared/schema";
 import { InstructorDetailToggle } from "@/components/instructor-detail-popover";
 import { VoiceDictation } from "@/components/voice-dictation";
@@ -423,6 +423,14 @@ export default function Planner() {
     dragCounter.current = 0;
   }, []);
 
+  const handleMoveRow = useCallback((fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= orderedPlannerRows.length) return;
+    const currentIds = orderedPlannerRows.map(r => r.instructor.id);
+    const [moved] = currentIds.splice(fromIdx, 1);
+    currentIds.splice(toIdx, 0, moved);
+    saveOrder(currentIds);
+  }, [orderedPlannerRows, saveOrder]);
+
   const sortedMeetings = [...meetings].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i);
@@ -480,7 +488,7 @@ export default function Planner() {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="startTime"
@@ -848,10 +856,32 @@ export default function Planner() {
                                 e.dataTransfer.effectAllowed = "move";
                                 handleDragStart(rowIndex);
                               }}
-                              className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground shrink-0"
+                              className="hidden sm:block cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground shrink-0"
                               data-testid={`drag-handle-${row.instructor.id}`}
                             >
                               <GripVertical className="w-4 h-4" />
+                            </div>
+                            <div className="flex sm:hidden flex-col gap-0.5 shrink-0">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5 text-muted-foreground/50"
+                                disabled={rowIndex === 0}
+                                onClick={() => handleMoveRow(rowIndex, rowIndex - 1)}
+                                data-testid={`button-move-up-${row.instructor.id}`}
+                              >
+                                <ChevronUp className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5 text-muted-foreground/50"
+                                disabled={rowIndex === orderedPlannerRows.length - 1}
+                                onClick={() => handleMoveRow(rowIndex, rowIndex + 1)}
+                                data-testid={`button-move-down-${row.instructor.id}`}
+                              >
+                                <ChevronDown className="w-3 h-3" />
+                              </Button>
                             </div>
                             <div className="min-w-0 flex-1 flex flex-col justify-center">
                               <p className="font-medium text-sm truncate">{row.instructor.name}</p>
