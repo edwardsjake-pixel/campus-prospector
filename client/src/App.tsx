@@ -12,6 +12,7 @@ import { Redirect } from "wouter";
 import Visits from "@/pages/visits";
 import Planner from "@/pages/planner";
 import Availability from "@/pages/availability";
+import OrgSettings from "@/pages/org-settings";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
@@ -56,6 +57,9 @@ function Router() {
       </Route>
       <Route path="/availability">
         {() => <ProtectedRoute component={Availability} />}
+      </Route>
+      <Route path="/settings">
+        {() => <ProtectedRoute component={OrgSettings} />}
       </Route>
       
       <Route component={NotFound} />

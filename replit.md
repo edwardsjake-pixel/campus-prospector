@@ -59,6 +59,7 @@ Instructors ↔ Courses (many-to-many via course_instructors join table)
 Instructors → Office Hours (via instructorId FK)
 Instructors → Deals (via instructorId FK, optional courseId FK)
 Instructors → Planned Meetings (via instructorId FK)
+Organizations → Users (via organizationId FK on users)
 ```
 
 ### Database Tables
@@ -72,8 +73,9 @@ Instructors → Planned Meetings (via instructorId FK)
 - `visit_interactions` — Interactions during visits (linked to visits via visitId, and instructors via instructorId)
 - `planned_meetings` — Date, start/end time, instructor, location, purpose, status, meetingType (scheduled/drop_in), notes, linked to user and instructor
 - `deals` — HubSpot deal data: hubspotDealId, dealName, stage, amount, closeDate, pipeline, linked to instructor (instructorId FK) and optionally course (courseId FK); synced from HubSpot CRM
+- `organizations` — id, name (unique), logoUrl, primaryColor (hex), plan (free/individual/enterprise), stripeCustomerId, stripeSubscriptionId, createdAt; enterprise branding entity
 - `sessions` — Session storage for Replit Auth (mandatory, do not drop)
-- `users` — User storage for Replit Auth (mandatory, do not drop)
+- `users` — User storage for Replit Auth (mandatory, do not drop); has `organizationId` FK to organizations (nullable)
 
 ### Key Types
 - `InstructorWithDetails` — Returned by `getInstructors()`: includes `department: DepartmentWithInstitution | null` (where `DepartmentWithInstitution` has `institution: Institution`), `courses: Course[]`, `officeHours: OfficeHour[]`

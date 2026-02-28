@@ -825,6 +825,120 @@ export async function registerRoutes(
     }
   });
 
+  // === Organizations ===
+  app.get("/api/user/organization", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const org = await storage.getUserOrganization(userId);
+    res.json(org);
+  });
+
+  app.post("/api/organizations", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const { name, primaryColor } = req.body;
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return res.status(400).json({ message: "Organization name is required" });
+      }
+      const userId = (req.user as any).claims?.sub;
+      const org = await storage.createOrganization({ name: name.trim(), primaryColor: primaryColor || null });
+      await storage.setUserOrganization(userId, org.id);
+      res.status(201).json(org);
+    } catch (error: any) {
+      if (error?.constraint === "organizations_name_unique") {
+        return res.status(409).json({ message: "An organization with that name already exists" });
+      }
+      res.status(400).json({ message: "Failed to create organization" });
+    }
+  });
+
+  app.put("/api/organizations/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const orgId = Number(req.params.id);
+      const userId = (req.user as any).claims?.sub;
+      const userOrg = await storage.getUserOrganization(userId);
+      if (!userOrg || userOrg.id !== orgId) {
+        return res.status(403).json({ message: "Not a member of this organization" });
+      }
+      const { name, primaryColor, logoUrl } = req.body;
+      const updates: any = {};
+      if (name !== undefined) updates.name = name;
+      if (primaryColor !== undefined) updates.primaryColor = primaryColor || null;
+      if (logoUrl !== undefined) updates.logoUrl = logoUrl || null;
+      const org = await storage.updateOrganization(orgId, updates);
+      res.json(org);
+    } catch (error) {
+      res.status(400).json({ message: "Failed to update organization" });
+    }
+  });
+
+  app.post("/api/organizations/:id/logo", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const orgId = Number(req.params.id);
+      const userId = (req.user as any).claims?.sub;
+      const userOrg = await storage.getUserOrganization(userId);
+      if (!userOrg || userOrg.id !== orgId) {
+        return res.status(403).json({ message: "Not a member of this organization" });
+      }
+      const { image } = req.body;
+      if (!image || typeof image !== "string") {
+        return res.status(400).json({ message: "Base64 image data required" });
+      }
+      const matches = image.match(/^data:image\/(png|jpe?g|svg\+xml|webp);base64,(.+)$/);
+      if (!matches) {
+        return res.status(400).json({ message: "Invalid image format. Accepted: png, jpg, svg, webp" });
+      }
+      const buffer = Buffer.from(matches[2], "base64");
+      if (buffer.length > 2 * 1024 * 1024) {
+        return res.status(400).json({ message: "Image must be under 2MB" });
+      }
+      const ext = matches[1] === "svg+xml" ? "svg" : matches[1].replace("jpeg", "jpg");
+      const logoFilename = `org-${orgId}-${Date.now()}.${ext}`;
+      const fs = await import("fs");
+      const logoPath = await import("path");
+      const logoDir = logoPath.join(process.cwd(), "public", "logos");
+      if (!fs.existsSync(logoDir)) {
+        fs.mkdirSync(logoDir, { recursive: true });
+      }
+      fs.writeFileSync(logoPath.join(logoDir, logoFilename), buffer);
+      const logoUrlPath = `/logos/${logoFilename}`;
+      const org = await storage.updateOrganization(orgId, { logoUrl: logoUrlPath });
+      res.json(org);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to upload logo" });
+    }
+  });
+
+  app.post("/api/user/organization", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const { organizationId } = req.body;
+      if (!organizationId || typeof organizationId !== "number") {
+        return res.status(400).json({ message: "Organization ID is required" });
+      }
+      const org = await storage.getOrganization(organizationId);
+      if (!org) return res.status(404).json({ message: "Organization not found" });
+      const userId = (req.user as any).claims?.sub;
+      await storage.setUserOrganization(userId, organizationId);
+      res.json(org);
+    } catch (error) {
+      res.status(400).json({ message: "Failed to join organization" });
+    }
+  });
+
+  // Serve uploaded logos
+  const fsSync = await import("fs");
+  const pathMod = await import("path");
+  const logosDir = pathMod.join(process.cwd(), "public", "logos");
+  if (!fsSync.existsSync(logosDir)) {
+    fsSync.mkdirSync(logosDir, { recursive: true });
+  }
+  const express = await import("express");
+  app.use("/logos", express.default.static(logosDir));
+
   // Startup diagnostics
   const startupInstructors = await storage.getInstructors();
   const dbUrl = process.env.DATABASE_URL || "NOT SET";

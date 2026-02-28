@@ -9,6 +9,8 @@ import {
   visitInteractions,
   plannedMeetings,
   deals,
+  organizations,
+  users,
   type Institution,
   type InsertInstitution,
   type Department,
@@ -31,6 +33,8 @@ import {
   type InsertPlannedMeeting,
   type Deal,
   type InsertDeal,
+  type Organization,
+  type InsertOrganization,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, like, or, and, inArray } from "drizzle-orm";
@@ -96,6 +100,13 @@ export interface IStorage {
   bulkCreateInstructors(items: { name: string; email?: string | null; institutionName?: string | null; departmentName?: string | null; departmentId?: number | null; officeLocation?: string | null; bio?: string | null; notes?: string | null; targetPriority?: string | null }[]): Promise<{ created: Instructor[]; existing: Instructor[]; updated: Instructor[]; skippedCount: number }>;
   bulkCreateCourses(items: InsertCourse[]): Promise<Course[]>;
   seedAllData(data: any): Promise<void>;
+
+  // Organizations
+  getOrganization(id: number): Promise<Organization | undefined>;
+  createOrganization(data: InsertOrganization): Promise<Organization>;
+  updateOrganization(id: number, updates: Partial<InsertOrganization>): Promise<Organization>;
+  getUserOrganization(userId: string): Promise<Organization | null>;
+  setUserOrganization(userId: string, orgId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -705,6 +716,33 @@ export class DatabaseStorage implements IStorage {
       }
       console.log(`[seed] ${data.planned_meetings.length} planned_meetings`);
     }
+  }
+
+  // Organizations
+  async getOrganization(id: number): Promise<Organization | undefined> {
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, id));
+    return org;
+  }
+
+  async createOrganization(data: InsertOrganization): Promise<Organization> {
+    const [org] = await db.insert(organizations).values(data).returning();
+    return org;
+  }
+
+  async updateOrganization(id: number, updates: Partial<InsertOrganization>): Promise<Organization> {
+    const [org] = await db.update(organizations).set(updates).where(eq(organizations.id, id)).returning();
+    return org;
+  }
+
+  async getUserOrganization(userId: string): Promise<Organization | null> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user?.organizationId) return null;
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, user.organizationId));
+    return org || null;
+  }
+
+  async setUserOrganization(userId: string, orgId: number): Promise<void> {
+    await db.update(users).set({ organizationId: orgId }).where(eq(users.id, userId));
   }
 }
 

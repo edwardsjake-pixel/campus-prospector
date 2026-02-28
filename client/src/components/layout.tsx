@@ -1,5 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
+import { getQueryFn } from "@/lib/queryClient";
 import { 
   LayoutDashboard, 
   Users, 
@@ -8,17 +10,24 @@ import {
   GanttChart,
   LogOut,
   Menu,
-  X
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import type { Organization } from "@shared/schema";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
+
+  const { data: org } = useQuery<Organization | null>({
+    queryKey: ["/api/user/organization"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    enabled: !!user,
+  });
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -28,14 +37,48 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Visits', href: '/visits', icon: MapPin },
   ];
 
-  const NavContent = () => (
-    <div className="flex flex-col h-full bg-slate-900 text-white">
+  const BrandingHeader = () => {
+    if (org?.logoUrl) {
+      return (
+        <div className="p-6 border-b border-white/10">
+          <div className="max-h-14 flex items-center" data-testid="img-sidebar-logo">
+            <img
+              src={org.logoUrl}
+              alt={org.name}
+              className="max-h-14 max-w-full object-contain"
+            />
+          </div>
+          <p className="text-[10px] text-slate-500 mt-2">Powered by CampusAlly</p>
+        </div>
+      );
+    }
+    return (
       <div className="p-6 border-b border-white/10">
         <h1 className="text-2xl font-display font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
           CampusAlly
         </h1>
         <p className="text-sm text-slate-400 mt-1">EdTech Sales OS</p>
       </div>
+    );
+  };
+
+  const MobileBranding = () => {
+    if (org?.logoUrl) {
+      return (
+        <img
+          src={org.logoUrl}
+          alt={org.name}
+          className="ml-4 max-h-8 object-contain"
+          data-testid="img-mobile-logo"
+        />
+      );
+    }
+    return <span className="ml-4 font-display font-bold text-lg text-white">CampusAlly</span>;
+  };
+
+  const NavContent = () => (
+    <div className="flex flex-col h-full bg-slate-900 text-white">
+      <BrandingHeader />
 
       <nav className="flex-1 px-4 py-6 space-y-2">
         {navigation.map((item) => {
@@ -45,9 +88,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <div
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group ${
                   isActive
-                    ? "bg-primary text-white shadow-lg shadow-primary/25"
+                    ? `text-white shadow-lg ${org?.primaryColor ? "" : "bg-primary shadow-primary/25"}`
                     : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
+                style={isActive && org?.primaryColor ? { backgroundColor: org.primaryColor, boxShadow: `0 10px 15px -3px ${org.primaryColor}40` } : undefined}
               >
                 <item.icon className={`w-5 h-5 ${isActive ? "text-white" : "text-slate-400 group-hover:text-white"}`} />
                 <span className="font-medium">{item.name}</span>
@@ -68,14 +112,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <p className="text-xs text-slate-400 truncate">{user?.email}</p>
           </div>
         </div>
-        <Button 
-          variant="outline" 
-          className="w-full justify-start text-red-400 border-red-400/20 hover:text-red-300 hover:bg-red-400/10"
-          onClick={() => logout()}
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          Sign Out
-        </Button>
+        <div className="space-y-2">
+          <Link href="/settings" onClick={() => setOpen(false)}>
+            <div
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                location === "/settings"
+                  ? "bg-white/10 text-white"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
+              }`}
+              data-testid="link-settings"
+            >
+              <Settings className="w-4 h-4" />
+              <span className="text-sm font-medium">Settings</span>
+            </div>
+          </Link>
+          <Button 
+            variant="outline" 
+            className="w-full justify-start text-red-400 border-red-400/20 hover:text-red-300 hover:bg-red-400/10"
+            onClick={() => logout()}
+            data-testid="button-sign-out"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Sign Out
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -99,7 +159,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <NavContent />
           </SheetContent>
         </Sheet>
-        <span className="ml-4 font-display font-bold text-lg text-white">CampusAlly</span>
+        <MobileBranding />
       </div>
 
       {/* Main Content */}
