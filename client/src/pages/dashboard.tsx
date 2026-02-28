@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { format, startOfWeek, addDays, isToday } from "date-fns";
+import { formatTime } from "@/lib/utils";
 import type { PlannedMeeting, Instructor, Deal } from "@shared/schema";
 
 function getWeekDays(reference: Date): Date[] {
@@ -19,13 +20,6 @@ function getWeekDays(reference: Date): Date[] {
   return Array.from({ length: 5 }, (_, i) => addDays(monday, i));
 }
 
-function formatTime(t: string) {
-  const [h, m] = t.split(":");
-  const hour = parseInt(h);
-  const ampm = hour >= 12 ? "PM" : "AM";
-  const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-  return `${h12}:${m} ${ampm}`;
-}
 
 function WeeklyCalendar({
   meetings,
@@ -95,7 +89,7 @@ function WeeklyCalendar({
                             }`}
                             data-testid={`week-meeting-${m.id}`}
                           >
-                            {m.startTime.slice(0, 5)} {inst?.name?.split(" ")[0] || ""}
+                            {formatTime(m.startTime)} {inst?.name?.split(" ")[0] || ""}
                           </div>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="max-w-xs">

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { MapPin, User, Filter, CalendarPlus, Building2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { formatTime } from "@/lib/utils";
 import { format } from "date-fns";
 import type { Instructor, OfficeHour, Course, Deal } from "@shared/schema";
 import { InstructorDetailToggle } from "@/components/instructor-detail-popover";
@@ -57,13 +58,6 @@ function minutesToWidth(start: number, end: number): number {
   return ((end - start) / totalMinutes) * 100;
 }
 
-function formatTime(time: string): string {
-  const [h, m] = time.split(":");
-  const hour = parseInt(h);
-  const ampm = hour >= 12 ? "PM" : "AM";
-  const display = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-  return `${display}:${m} ${ampm}`;
-}
 
 function minutesToTimeStr(minutes: number): string {
   const h = Math.floor(minutes / 60);

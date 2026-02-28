@@ -1,6 +1,7 @@
 import { Layout } from "@/components/layout";
 import { useCourses, useCreateCourse, useUpdateCourse, useDeleteCourse } from "@/hooks/use-courses";
 import { useInstructors } from "@/hooks/use-instructors";
+import { formatTime } from "@/lib/utils";
 import { 
   Table, 
   TableBody, 
@@ -522,7 +523,7 @@ export default function Courses() {
                           <span className="font-medium">{course.daysOfWeek.split(",").map((d: string) => d.trim().slice(0, 3)).join("/")}</span>
                           {course.lectureStartTime && course.lectureEndTime && (
                             <span className="text-muted-foreground ml-1">
-                              {course.lectureStartTime.slice(0, 5)}-{course.lectureEndTime.slice(0, 5)}
+                              {formatTime(course.lectureStartTime)}-{formatTime(course.lectureEndTime)}
                             </span>
                           )}
                           {course.building && (

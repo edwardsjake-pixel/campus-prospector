@@ -8,6 +8,7 @@ import { SiHubspot } from "react-icons/si";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { formatTime } from "@/lib/utils";
 import type { Instructor, Course, OfficeHour } from "@shared/schema";
 
 const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -336,7 +337,7 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
                   ) : (
                     <div key={oh.id} className="flex items-center gap-1">
                       <Badge variant="secondary" className="text-[10px] flex-1">
-                        {oh.dayOfWeek} {oh.startTime?.slice(0, 5)}-{oh.endTime?.slice(0, 5)}
+                        {oh.dayOfWeek} {oh.startTime ? formatTime(oh.startTime) : ""}-{oh.endTime ? formatTime(oh.endTime) : ""}
                         {oh.location ? ` @ ${oh.location}` : ""}
                       </Badge>
                       <Button
@@ -427,7 +428,7 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
                           {course.daysOfWeek && course.lectureStartTime && course.lectureEndTime && (
                             <span className="ml-1">
                               {course.daysOfWeek.split(",").map(d => d.trim().slice(0, 3)).join("/")}
-                              {" "}{course.lectureStartTime.slice(0, 5)}-{course.lectureEndTime.slice(0, 5)}
+                              {" "}{formatTime(course.lectureStartTime)}-{formatTime(course.lectureEndTime)}
                             </span>
                           )}
                           {course.building && <span className="ml-1">{course.building}{course.room ? ` ${course.room}` : ""}</span>}

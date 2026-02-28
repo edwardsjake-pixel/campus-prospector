@@ -16,6 +16,7 @@ import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { formatTime } from "@/lib/utils";
 import { format } from "date-fns";
 import { Plus, Clock, MapPin, Trash2, CalendarDays, Check, GripVertical, ChevronDown, ChevronUp, Mic, Anchor, Zap, FileText, Save, DollarSign } from "lucide-react";
 import type { PlannedMeeting, Instructor, OfficeHour, Course, Deal } from "@shared/schema";
@@ -62,13 +63,6 @@ function minutesToWidth(start: number, end: number): number {
   return ((end - start) / totalMinutes) * 100;
 }
 
-function formatTime(time: string): string {
-  const [h, m] = time.split(":");
-  const hour = parseInt(h);
-  const ampm = hour >= 12 ? "PM" : "AM";
-  const display = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-  return `${display}:${m} ${ampm}`;
-}
 
 function computeAvailableWindows(
   officeHours: OfficeHour[],
@@ -655,7 +649,7 @@ export default function Planner() {
                             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
                               <span className="flex items-center gap-0.5">
                                 <Clock className="w-3 h-3" />
-                                {meeting.startTime.slice(0, 5)} – {meeting.endTime.slice(0, 5)}
+                                {formatTime(meeting.startTime)} – {formatTime(meeting.endTime)}
                               </span>
                               {meeting.location && (
                                 <span className="flex items-center gap-0.5">
