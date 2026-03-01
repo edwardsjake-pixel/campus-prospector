@@ -2,15 +2,16 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryFn } from "@/lib/queryClient";
-import { 
-  LayoutDashboard, 
-  Users, 
-  MapPin, 
-  Calendar, 
+import {
+  LayoutDashboard,
+  Users,
+  MapPin,
+  Calendar,
   GanttChart,
   LogOut,
   Menu,
   Settings,
+  Database,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -35,6 +36,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { name: 'Availability', href: '/availability', icon: GanttChart },
     { name: 'Faculty & Courses', href: '/instructors', icon: Users },
     { name: 'Visits', href: '/visits', icon: MapPin },
+    { name: 'Data Pipeline', href: '/pipeline', icon: Database },
   ];
 
   const BrandingHeader = () => {

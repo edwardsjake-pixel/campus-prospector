@@ -9,6 +9,10 @@ import {
   visitInteractions,
   plannedMeetings,
   deals,
+  instructorSchedules,
+  courseDetails,
+  institutionDetails,
+  scrapeJobs,
   organizations,
   users,
   type Institution,
@@ -33,6 +37,14 @@ import {
   type InsertPlannedMeeting,
   type Deal,
   type InsertDeal,
+  type InstructorSchedule,
+  type InsertInstructorSchedule,
+  type CourseDetails,
+  type InsertCourseDetails,
+  type InstitutionDetails,
+  type InsertInstitutionDetails,
+  type ScrapeJob,
+  type InsertScrapeJob,
   type Organization,
   type InsertOrganization,
 } from "@shared/schema";
@@ -100,6 +112,25 @@ export interface IStorage {
   bulkCreateInstructors(items: { name: string; email?: string | null; institutionName?: string | null; departmentName?: string | null; departmentId?: number | null; officeLocation?: string | null; bio?: string | null; notes?: string | null; targetPriority?: string | null }[]): Promise<{ created: Instructor[]; existing: Instructor[]; updated: Instructor[]; skippedCount: number }>;
   bulkCreateCourses(items: InsertCourse[]): Promise<Course[]>;
   seedAllData(data: any): Promise<void>;
+
+  // Scrape Jobs
+  createScrapeJob(job: InsertScrapeJob): Promise<ScrapeJob>;
+  getScrapeJobs(institutionId?: number): Promise<ScrapeJob[]>;
+  getScrapeJob(id: number): Promise<ScrapeJob | undefined>;
+  updateScrapeJob(id: number, updates: Partial<ScrapeJob>): Promise<ScrapeJob>;
+  getScrapeJobStats(): Promise<{ total: number; pending: number; running: number; complete: number; failed: number }>;
+
+  // Instructor Schedules
+  getInstructorSchedules(instructorId: number): Promise<InstructorSchedule[]>;
+  createInstructorSchedule(schedule: InsertInstructorSchedule): Promise<InstructorSchedule>;
+
+  // Course Details
+  getCourseDetails(courseId: number): Promise<CourseDetails | undefined>;
+  upsertCourseDetails(details: InsertCourseDetails): Promise<CourseDetails>;
+
+  // Institution Details
+  getInstitutionDetails(institutionId: number): Promise<InstitutionDetails | undefined>;
+  upsertInstitutionDetails(details: InsertInstitutionDetails): Promise<InstitutionDetails>;
 
   // Organizations
   getOrganization(id: number): Promise<Organization | undefined>;
@@ -716,6 +747,88 @@ export class DatabaseStorage implements IStorage {
       }
       console.log(`[seed] ${data.planned_meetings.length} planned_meetings`);
     }
+  }
+
+  // Scrape Jobs
+  async createScrapeJob(job: InsertScrapeJob): Promise<ScrapeJob> {
+    const [created] = await db.insert(scrapeJobs).values(job).returning();
+    return created;
+  }
+
+  async getScrapeJobs(institutionId?: number): Promise<ScrapeJob[]> {
+    if (institutionId) {
+      return db.select().from(scrapeJobs).where(eq(scrapeJobs.institutionId, institutionId));
+    }
+    return db.select().from(scrapeJobs);
+  }
+
+  async getScrapeJob(id: number): Promise<ScrapeJob | undefined> {
+    const [job] = await db.select().from(scrapeJobs).where(eq(scrapeJobs.id, id));
+    return job;
+  }
+
+  async updateScrapeJob(id: number, updates: Partial<ScrapeJob>): Promise<ScrapeJob> {
+    const [updated] = await db.update(scrapeJobs).set(updates).where(eq(scrapeJobs.id, id)).returning();
+    return updated;
+  }
+
+  async getScrapeJobStats(): Promise<{ total: number; pending: number; running: number; complete: number; failed: number }> {
+    const all = await db.select().from(scrapeJobs);
+    return {
+      total: all.length,
+      pending: all.filter(j => j.status === "pending").length,
+      running: all.filter(j => j.status === "running").length,
+      complete: all.filter(j => j.status === "complete").length,
+      failed: all.filter(j => j.status === "failed").length,
+    };
+  }
+
+  // Instructor Schedules
+  async getInstructorSchedules(instructorId: number): Promise<InstructorSchedule[]> {
+    return db.select().from(instructorSchedules).where(eq(instructorSchedules.instructorId, instructorId));
+  }
+
+  async createInstructorSchedule(schedule: InsertInstructorSchedule): Promise<InstructorSchedule> {
+    const [created] = await db.insert(instructorSchedules).values(schedule).returning();
+    return created;
+  }
+
+  // Course Details
+  async getCourseDetails(courseId: number): Promise<CourseDetails | undefined> {
+    const [detail] = await db.select().from(courseDetails).where(eq(courseDetails.courseId, courseId));
+    return detail;
+  }
+
+  async upsertCourseDetails(details: InsertCourseDetails): Promise<CourseDetails> {
+    const existing = await this.getCourseDetails(details.courseId);
+    if (existing) {
+      const [updated] = await db.update(courseDetails)
+        .set({ ...details, scrapedAt: new Date() })
+        .where(eq(courseDetails.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(courseDetails).values(details).returning();
+    return created;
+  }
+
+  // Institution Details
+  async getInstitutionDetails(institutionId: number): Promise<InstitutionDetails | undefined> {
+    const [detail] = await db.select().from(institutionDetails).where(eq(institutionDetails.institutionId, institutionId));
+    return detail;
+  }
+
+  async upsertInstitutionDetails(details: InsertInstitutionDetails): Promise<InstitutionDetails> {
+    const existing = await this.getInstitutionDetails(details.institutionId);
+    if (existing) {
+      const [updated] = await db.update(institutionDetails)
+        .set({ ...details, scrapedAt: new Date() })
+        .where(eq(institutionDetails.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(institutionDetails).values(details).returning();
+    return created;
   }
 
   // Organizations

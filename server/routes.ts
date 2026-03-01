@@ -729,6 +729,183 @@ export async function registerRoutes(
     }
   });
 
+  // === Scrape Pipeline ===
+
+  // Queue all scrape jobs for an institution
+  app.post("/api/scrape/institution/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const institutionId = Number(req.params.id);
+    if (isNaN(institutionId)) return res.status(400).json({ message: "Invalid institution ID" });
+
+    const institution = (await storage.getInstitutions()).find(i => i.id === institutionId);
+    if (!institution) return res.status(404).json({ message: "Institution not found" });
+
+    const jobTypes = ["faculty_directory", "course_schedule", "rmp", "syllabus", "institution_it"] as const;
+    const created = await Promise.all(
+      jobTypes.map(jobType =>
+        storage.createScrapeJob({ institutionId, jobType, status: "pending" })
+      )
+    );
+
+    // Fire-and-forget: run jobs asynchronously
+    runScrapeJobsForInstitution(institutionId, institution.domain || "", institution.name, created.map(j => j.id)).catch(
+      err => console.error(`[scrape] institution ${institutionId} pipeline error:`, err)
+    );
+
+    res.status(202).json({ queued: created.length, jobs: created });
+  });
+
+  // List all scrape jobs (optionally filtered by institutionId)
+  app.get("/api/scrape/jobs", async (req, res) => {
+    const institutionId = req.query.institutionId ? Number(req.query.institutionId) : undefined;
+    const jobs = await storage.getScrapeJobs(institutionId);
+    res.json(jobs);
+  });
+
+  // Queue a scrape for a specific instructor
+  app.post("/api/scrape/instructor/:id", async (req, res) => {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const instructorId = Number(req.params.id);
+    if (isNaN(instructorId)) return res.status(400).json({ message: "Invalid instructor ID" });
+
+    const instructor = await storage.getInstructor(instructorId);
+    if (!instructor) return res.status(404).json({ message: "Instructor not found" });
+
+    const institutionId = await resolveInstructorInstitutionId(instructorId);
+    if (!institutionId) return res.status(400).json({ message: "Instructor has no associated institution" });
+
+    const jobTypes = ["faculty_directory", "rmp", "linkedin"] as const;
+    const created = await Promise.all(
+      jobTypes.map(jobType =>
+        storage.createScrapeJob({ institutionId, jobType, status: "pending" })
+      )
+    );
+
+    runInstructorScrape(instructorId, created.map(j => j.id)).catch(
+      err => console.error(`[scrape] instructor ${instructorId} error:`, err)
+    );
+
+    res.status(202).json({ queued: created.length, jobs: created });
+  });
+
+  // Overall pipeline health
+  app.get("/api/scrape/status", async (_req, res) => {
+    const stats = await storage.getScrapeJobStats();
+    res.json({
+      ...stats,
+      healthy: stats.running < 10,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Helper: resolve institutionId from an instructorId
+  async function resolveInstructorInstitutionId(instructorId: number): Promise<number | null> {
+    const instructor = await storage.getInstructor(instructorId);
+    if (!instructor?.departmentId) return null;
+    const depts = await storage.getDepartments();
+    const dept = depts.find(d => d.id === instructor.departmentId);
+    return dept?.institution?.id ?? null;
+  }
+
+  // Helper: run the full institution scrape pipeline
+  async function runScrapeJobsForInstitution(institutionId: number, domain: string, institutionName: string, jobIds: number[]) {
+    const { execFile } = await import("child_process");
+    const { promisify } = await import("util");
+    const execFileAsync = promisify(execFile);
+
+    const scraperMap: Record<string, string> = {
+      faculty_directory: "server/scraper/faculty_scraper.py",
+      course_schedule: "server/scraper/course_schedule_scraper.py",
+      rmp: "server/scraper/rmp_scraper.py",
+      institution_it: "server/scraper/faculty_scraper.py",
+      syllabus: "server/scraper/syllabus_hunter.py",
+    };
+
+    const jobs = await storage.getScrapeJobs(institutionId);
+    for (const jobId of jobIds) {
+      const job = jobs.find(j => j.id === jobId);
+      if (!job) continue;
+
+      const scriptPath = scraperMap[job.jobType];
+      if (!scriptPath) continue;
+
+      await storage.updateScrapeJob(jobId, { status: "running", startedAt: new Date() });
+      try {
+        const args = [scriptPath, "--domain", domain || "", "--institution-name", institutionName];
+        const { stdout, stderr } = await execFileAsync("python3", args, {
+          timeout: 180000,
+          maxBuffer: 10 * 1024 * 1024,
+          cwd: process.cwd(),
+        });
+        if (stderr) console.log(`[scrape][${job.jobType}] stderr:`, stderr.slice(0, 500));
+        const result = JSON.parse(stdout);
+        const recordsAdded = result.records_added ?? result.total_found ?? 0;
+        await storage.updateScrapeJob(jobId, { status: "complete", completedAt: new Date(), recordsAdded });
+      } catch (err: any) {
+        await storage.updateScrapeJob(jobId, {
+          status: "failed",
+          completedAt: new Date(),
+          errorMessage: err.message?.slice(0, 500) ?? "Unknown error",
+        });
+      }
+    }
+  }
+
+  // Helper: run scrape pipeline for a single instructor
+  async function runInstructorScrape(instructorId: number, jobIds: number[]) {
+    const instructor = await storage.getInstructor(instructorId);
+    if (!instructor) return;
+
+    const { execFile } = await import("child_process");
+    const { promisify } = await import("util");
+    const execFileAsync = promisify(execFile);
+
+    const jobs = await storage.getScrapeJobs();
+    for (const jobId of jobIds) {
+      const job = jobs.find(j => j.id === jobId);
+      if (!job) continue;
+
+      await storage.updateScrapeJob(jobId, { status: "running", startedAt: new Date() });
+      try {
+        let scriptPath = "server/scraper/faculty_scraper.py";
+        if (job.jobType === "rmp") scriptPath = "server/scraper/rmp_scraper.py";
+
+        const args = [scriptPath, "--name", instructor.name];
+        const { stdout, stderr } = await execFileAsync("python3", args, {
+          timeout: 120000,
+          maxBuffer: 5 * 1024 * 1024,
+          cwd: process.cwd(),
+        });
+        if (stderr) console.log(`[scrape][${job.jobType}] stderr:`, stderr.slice(0, 500));
+        const result = JSON.parse(stdout);
+
+        // Merge scraped fields back onto instructor
+        if (result.instructor) {
+          const updates: any = {};
+          if (result.instructor.email && !instructor.email) updates.email = result.instructor.email;
+          if (result.instructor.phone) updates.phone = result.instructor.phone;
+          if (result.instructor.bio && !instructor.bio) updates.bio = result.instructor.bio;
+          if (result.instructor.photo_url) updates.photoUrl = result.instructor.photo_url;
+          if (result.instructor.linkedin_url) updates.linkedinUrl = result.instructor.linkedin_url;
+          if (result.instructor.personal_website) updates.personalWebsite = result.instructor.personal_website;
+          if (result.instructor.tenure_status) updates.tenureStatus = result.instructor.tenure_status;
+          updates.lastScrapedAt = new Date();
+          if (Object.keys(updates).length > 0) {
+            await storage.updateInstructor(instructorId, updates);
+          }
+        }
+
+        await storage.updateScrapeJob(jobId, { status: "complete", completedAt: new Date(), recordsAdded: 1 });
+      } catch (err: any) {
+        await storage.updateScrapeJob(jobId, {
+          status: "failed",
+          completedAt: new Date(),
+          errorMessage: err.message?.slice(0, 500) ?? "Unknown error",
+        });
+      }
+    }
+  }
+
   // === Packback Scraper ===
   const scrapeInputSchema = z.object({
     urls: z.array(z.string().url()).max(10).optional(),

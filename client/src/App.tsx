@@ -13,6 +13,7 @@ import Visits from "@/pages/visits";
 import Planner from "@/pages/planner";
 import Availability from "@/pages/availability";
 import OrgSettings from "@/pages/org-settings";
+import Pipeline from "@/pages/pipeline";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
@@ -57,6 +58,9 @@ function Router() {
       </Route>
       <Route path="/availability">
         {() => <ProtectedRoute component={Availability} />}
+      </Route>
+      <Route path="/pipeline">
+        {() => <ProtectedRoute component={Pipeline} />}
       </Route>
       <Route path="/settings">
         {() => <ProtectedRoute component={OrgSettings} />}

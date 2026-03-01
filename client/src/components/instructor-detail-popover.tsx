@@ -3,12 +3,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronDown, ChevronUp, BookOpen, Clock, Mail, MapPin, Plus, Pencil, Trash2, Check, X, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, BookOpen, Clock, Mail, MapPin, Plus, Pencil, Trash2, Check, X, Loader2, RefreshCw } from "lucide-react";
 import { SiHubspot } from "react-icons/si";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatTime } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
 import type { Instructor, Course, OfficeHour } from "@shared/schema";
 
 const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -452,6 +453,16 @@ export function InstructorDetailToggle({ instructor, courses = [], officeHours =
               <p className="text-[10px] text-muted-foreground italic">No courses assigned</p>
             ) : null}
           </div>
+
+          {instructor.lastScrapedAt && (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground pt-1.5 border-t">
+              <RefreshCw className="w-2.5 h-2.5 shrink-0" />
+              <span>
+                Data scraped{" "}
+                {formatDistanceToNow(new Date(instructor.lastScrapedAt as unknown as string), { addSuffix: true })}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
