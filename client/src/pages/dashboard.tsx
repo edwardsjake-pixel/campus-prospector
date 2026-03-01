@@ -295,7 +295,7 @@ function DealPipeline({
       </CardHeader>
       <CardContent className="space-y-2">
         {stageGroups.map((group) => (
-          <div key={group.label} className="p-2 rounded-md border" data-testid={`pipeline-stage-${group.label}`}>
+          <div key={group.label} className="p-2 rounded-md border overflow-hidden" data-testid={`pipeline-stage-${group.label}`}>
             <div className="flex items-center justify-between gap-2 mb-1">
               <span className="text-sm font-medium truncate">{group.label}</span>
               <div className="flex items-center gap-2 shrink-0">
@@ -309,7 +309,7 @@ function DealPipeline({
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1 min-w-0">
               {group.deals.slice(0, 4).map((deal) => {
                 const inst = getInstructor(deal.instructorId);
                 return (
@@ -320,7 +320,7 @@ function DealPipeline({
                         className="text-[10px] bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 no-default-hover-elevate no-default-active-elevate"
                         data-testid={`deal-badge-${deal.id}`}
                       >
-                        {deal.dealName}
+                        {deal.dealName.length > 32 ? deal.dealName.slice(0, 32) + "…" : deal.dealName}
                       </Badge>
                     </TooltipTrigger>
                     <TooltipContent side="top" className="max-w-xs">
