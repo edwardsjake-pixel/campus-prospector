@@ -1,8 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth } from "./replit_integrations/auth";
-import { registerAuthRoutes } from "./replit_integrations/auth";
+import { setupAuth } from "./auth";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { insertInstructorSchema, insertCourseSchema, insertOfficeHourSchema, insertVisitSchema, insertVisitInteractionSchema, insertPlannedMeetingSchema } from "@shared/schema";
@@ -13,7 +12,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await setupAuth(app);
-  registerAuthRoutes(app);
+  // Auth routes are registered inside setupAuth()
 
   // === Institutions ===
   app.get("/api/institutions", async (req, res) => {
