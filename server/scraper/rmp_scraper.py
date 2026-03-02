@@ -12,6 +12,9 @@ Usage:
     python3 server/scraper/rmp_scraper.py --domain purdue.edu --institution-name "Purdue University"
 """
 
+import warnings
+warnings.filterwarnings("ignore")
+
 import json
 import logging
 import re

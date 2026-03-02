@@ -34,6 +34,18 @@ SCHEDULE_PATH_HINTS = [
     "/registrar/courses", "/class-search",
 ]
 
+# Institution-specific schedule URLs that need custom handling.
+# "schedule_mode" controls which scrape strategy is used.
+KNOWN_INSTITUTIONS: dict[str, dict] = {
+    "purdue.edu": {
+        # Banner Self-Service: requires a term-selection POST then a section-listing GET
+        "schedule_url": "https://selfservice.mypurdue.purdue.edu/prod/bwckschd.p_disp_dyn_sched",
+        "schedule_mode": "banner",
+        # Subjects to sample — full run would enumerate all Banner subjects
+        "sample_subjects": ["CS", "MA", "PHYS", "ENGL", "ECON", "MGMT", "IE"],
+    },
+}
+
 DAY_MAP = {
     "monday": "mon", "mon": "mon", "m": "mon",
     "tuesday": "tue", "tue": "tue", "t": "tue",
@@ -71,37 +83,42 @@ class CourseScheduleScraper:
         courses = []
         urls_scraped = []
 
-        start_urls = [self.custom_url] if self.custom_url else self._candidate_urls()
+        # Institution-specific handling takes priority over generic probing
+        known = KNOWN_INSTITUTIONS.get(self.domain, {}) if not self.custom_url else {}
+        if known and known.get("schedule_mode") == "banner":
+            courses, urls_scraped = await self._scrape_banner(known)
+        else:
+            start_urls = [self.custom_url] if self.custom_url else self._candidate_urls()
 
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-            for url in start_urls[:6]:
-                try:
-                    run_config = CrawlerRunConfig(
-                        wait_for="css:body",
-                        js_code=["window.scrollTo(0, document.body.scrollHeight);",
-                                 "await new Promise(r => setTimeout(r, 1000));"],
-                    )
-                    result = await crawler.arun(url=url, config=run_config)
-                    await asyncio.sleep(self.request_delay)
+            async with AsyncWebCrawler(config=browser_config) as crawler:
+                for url in start_urls[:6]:
+                    try:
+                        run_config = CrawlerRunConfig(
+                            wait_for="css:body",
+                            js_code=["window.scrollTo(0, document.body.scrollHeight);",
+                                     "await new Promise(r => setTimeout(r, 1000));"],
+                        )
+                        result = await crawler.arun(url=url, config=run_config)
+                        await asyncio.sleep(self.request_delay)
 
-                    if not result.success:
-                        continue
+                        if not result.success:
+                            continue
 
-                    md = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
-                    html = result.html or ""
+                        md = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
+                        html = result.html or ""
 
-                    if not any(kw in md.lower() for kw in ["credit", "lecture", "section", "enrollment", "semester"]):
-                        continue
+                        if not any(kw in md.lower() for kw in ["credit", "lecture", "section", "enrollment", "semester"]):
+                            continue
 
-                    extracted = self._extract_courses(md, html, url)
-                    if extracted:
-                        courses.extend(extracted)
-                        urls_scraped.append(url)
-                        logger.info(f"Extracted {len(extracted)} course sections from {url}")
-                        break  # found a good source, stop trying candidates
+                        extracted = self._extract_courses(md, html, url)
+                        if extracted:
+                            courses.extend(extracted)
+                            urls_scraped.append(url)
+                            logger.info(f"Extracted {len(extracted)} course sections from {url}")
+                            break  # found a good source, stop trying candidates
 
-                except Exception as e:
-                    logger.debug(f"URL {url} failed: {e}")
+                    except Exception as e:
+                        logger.debug(f"URL {url} failed: {e}")
 
         deduped = self._deduplicate(courses)
 
@@ -265,6 +282,167 @@ class CourseScheduleScraper:
             return int(re.sub(r'[^\d]', '', val))
         except (ValueError, TypeError):
             return None
+
+    async def _scrape_banner(self, config: dict) -> tuple[list[dict], list[str]]:
+        """
+        Scrape a Banner Self-Service schedule system.
+
+        Flow:
+          1. GET the dynamic schedule page to retrieve the current term options.
+          2. POST with the selected term to get the subject list.
+          3. For each sample subject, POST to retrieve section listings.
+          4. Parse the resulting HTML tables.
+        """
+        base_url = config["schedule_url"]
+        subjects = config.get("sample_subjects", [])
+        courses: list[dict] = []
+        urls_scraped: list[str] = []
+
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (compatible; CampusAlly/1.0)",
+        })
+
+        try:
+            # Step 1: GET the initial page to discover available terms
+            logger.info(f"Banner: fetching term list from {base_url}")
+            resp = session.get(base_url, timeout=20)
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            term_select = soup.find("select", {"name": "p_term"})
+            if not term_select:
+                logger.warning("Banner: could not find term selector on initial page")
+                return [], []
+
+            # Pick the first non-empty term option (most recent term)
+            term_value = None
+            for opt in term_select.find_all("option"):
+                val = opt.get("value", "").strip()
+                if val and val != "%":
+                    term_value = val
+                    break
+
+            if not term_value:
+                logger.warning("Banner: no valid term found")
+                return [], []
+
+            logger.info(f"Banner: selected term {term_value}")
+
+            # Step 2: POST to get subject list for the selected term
+            post_url = base_url.replace("p_disp_dyn_sched", "p_proc_term_date")
+            await asyncio.sleep(self.request_delay)
+            resp2 = session.post(post_url, data={"p_calling_proc": "bwckschd.p_disp_dyn_sched", "p_term": term_value}, timeout=20)
+
+            # Step 3: For each sample subject, retrieve sections
+            sections_url = base_url.replace("p_disp_dyn_sched", "p_get_crse_unsec")
+            for subj in subjects:
+                try:
+                    await asyncio.sleep(self.request_delay)
+                    form_data = {
+                        "term_in": term_value,
+                        "sel_subj": ["dummy", subj],
+                        "sel_day": "dummy",
+                        "sel_schd": "%",
+                        "sel_insm": "%",
+                        "sel_camp": "%",
+                        "sel_levl": "%",
+                        "sel_sess": "%",
+                        "sel_instr": "%",
+                        "sel_ptrm": "%",
+                        "sel_attr": "%",
+                        "sel_crse": "",
+                        "sel_title": "",
+                        "sel_from_cred": "",
+                        "sel_to_cred": "",
+                        "begin_hh": "0",
+                        "begin_mi": "0",
+                        "begin_ap": "a",
+                        "end_hh": "0",
+                        "end_mi": "0",
+                        "end_ap": "a",
+                    }
+                    logger.info(f"Banner: fetching sections for {subj} term={term_value}")
+                    resp3 = session.post(sections_url, data=form_data, timeout=30)
+                    resp3.raise_for_status()
+
+                    extracted = self._extract_banner_sections(resp3.text, sections_url, subj)
+                    if extracted:
+                        courses.extend(extracted)
+                        urls_scraped.append(f"{sections_url}?subj={subj}")
+                        logger.info(f"Banner {subj}: {len(extracted)} sections")
+
+                except Exception as e:
+                    logger.debug(f"Banner subject {subj} failed: {e}")
+
+        except Exception as e:
+            logger.error(f"Banner scrape failed: {e}")
+
+        return courses, urls_scraped
+
+    def _extract_banner_sections(self, html: str, source_url: str, subject: str) -> list[dict]:
+        """Parse Banner Self-Service section listing HTML."""
+        courses = []
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Banner wraps each course in a <th class="ddtitle"> followed by a <table> of sections
+        for title_th in soup.find_all("th", class_="ddtitle"):
+            course_title_text = title_th.get_text(" ", strip=True)
+            # Extract course code from title like "Introduction to CS - 12345 - CS 101 - 001"
+            code_match = re.search(r'([A-Z]{2,5})\s+(\d{3,5})', course_title_text)
+            course_code = f"{code_match.group(1)} {code_match.group(2)}" if code_match else subject
+            course_name_match = re.match(r'^([^-]+)', course_title_text)
+            course_name = course_name_match.group(1).strip() if course_name_match else course_title_text[:80]
+
+            # Find the sibling table with meeting time details
+            parent_tr = title_th.find_parent("tr")
+            if not parent_tr:
+                continue
+            parent_table = parent_tr.find_parent("table")
+            if not parent_table:
+                continue
+            next_table = parent_table.find_next_sibling("table")
+            if not next_table:
+                continue
+
+            for row in next_table.find_all("tr")[1:]:  # skip header row
+                cells = [td.get_text(" ", strip=True) for td in row.find_all("td")]
+                if len(cells) < 5:
+                    continue
+
+                # Banner columns: Type | Time | Days | Where | Date Range | Schedule Type | Instructors
+                time_raw = cells[1] if len(cells) > 1 else ""
+                days_raw = cells[2] if len(cells) > 2 else ""
+                location = cells[3] if len(cells) > 3 else ""
+                instructor = cells[6] if len(cells) > 6 else ""
+
+                if time_raw.lower() == "tba" or not time_raw:
+                    start_time, end_time = None, None
+                else:
+                    start_time, end_time = self._parse_time_range(time_raw)
+
+                days = self._parse_days(days_raw) if days_raw.upper() != "TBA" else None
+
+                # Split location into building + room
+                loc_parts = location.split() if location else []
+                room = loc_parts[-1] if loc_parts else None
+                building = " ".join(loc_parts[:-1]) if len(loc_parts) > 1 else location
+
+                courses.append({
+                    "code": course_code[:30],
+                    "name": course_name[:120],
+                    "days_of_week": days,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "building": building[:80],
+                    "room_number": room[:20] if room else None,
+                    "enrollment_count": None,
+                    "max_enrollment": None,
+                    "instructor_name": instructor[:80],
+                    "source_url": source_url,
+                    "scraped_date": datetime.now().strftime("%Y-%m-%d"),
+                })
+
+        return courses
 
     def _deduplicate(self, courses: list[dict]) -> list[dict]:
         seen: set[str] = set()

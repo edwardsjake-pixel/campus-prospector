@@ -32,6 +32,16 @@ DIRECTORY_PATH_HINTS = [
     "/directory", "/staff", "/about/faculty", "/academics/faculty",
 ]
 
+# Institution-specific directory URLs that don't follow generic patterns.
+# Key: domain (without www), Value: known directory URL or None to skip generic probing.
+KNOWN_INSTITUTIONS: dict[str, dict] = {
+    "purdue.edu": {
+        "directory_url": "https://www.purdue.edu/directory/",
+        # Purdue's directory is a search interface — we query by department letter
+        "search_mode": "purdue_ldap",
+    },
+}
+
 TENURE_KEYWORDS = {
     "tenured": ["tenured professor", "full professor", "professor of "],
     "tenure_track": ["assistant professor", "associate professor", "tenure-track"],
@@ -81,15 +91,29 @@ class FacultyScraper:
                     "records_added": 1 if result else 0,
                 }
 
-            # Full directory mode
-            found_dir_url = await self._find_directory_url(crawler)
-            if found_dir_url:
-                logger.info(f"Found directory at: {found_dir_url}")
-                people, scraped = await self._crawl_directory(crawler, found_dir_url)
-                faculty.extend(people)
-                urls_scraped.extend(scraped)
+            # Check KNOWN_INSTITUTIONS for institution-specific handling
+            known = KNOWN_INSTITUTIONS.get(self.domain, {})
+            if known:
+                search_mode = known.get("search_mode")
+                dir_url = known.get("directory_url")
+                if search_mode == "purdue_ldap":
+                    people, scraped = await self._scrape_purdue_directory(crawler, dir_url)
+                    faculty.extend(people)
+                    urls_scraped.extend(scraped)
+                elif dir_url:
+                    people, scraped = await self._crawl_directory(crawler, dir_url)
+                    faculty.extend(people)
+                    urls_scraped.extend(scraped)
             else:
-                logger.warning(f"No faculty directory found for {self.domain}")
+                # Generic: probe candidate URLs
+                found_dir_url = await self._find_directory_url(crawler)
+                if found_dir_url:
+                    logger.info(f"Found directory at: {found_dir_url}")
+                    people, scraped = await self._crawl_directory(crawler, found_dir_url)
+                    faculty.extend(people)
+                    urls_scraped.extend(scraped)
+                else:
+                    logger.warning(f"No faculty directory found for {self.domain}")
 
         return {
             "faculty": faculty,
@@ -311,6 +335,92 @@ class FacultyScraper:
         except Exception as e:
             logger.error(f"Single instructor search failed: {e}")
         return None
+
+    async def _scrape_purdue_directory(self, crawler, base_url: str) -> tuple[list[dict], list[str]]:
+        """
+        Purdue's directory at https://www.purdue.edu/directory/ is a search form (LDAP-backed).
+        We query by last-name initial A–Z to enumerate faculty records.
+        Each search returns an HTML table of matching people.
+        """
+        people: list[dict] = []
+        urls_scraped: list[str] = []
+        run_config = CrawlerRunConfig(wait_for="css:body")
+
+        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            search_url = f"{base_url}?search_by=name&query={letter}&submit=Search"
+            try:
+                logger.info(f"Purdue directory search: letter={letter}")
+                result = await crawler.arun(url=search_url, config=run_config)
+                await asyncio.sleep(self.request_delay)
+                if not result.success:
+                    continue
+
+                html = result.html or ""
+                md = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
+
+                # Skip pages with no results
+                if "no results" in md.lower() or "no records" in md.lower():
+                    continue
+
+                extracted = self._parse_purdue_results(html, md, search_url)
+                if extracted:
+                    people.extend(extracted)
+                    urls_scraped.append(search_url)
+                    logger.info(f"Purdue letter={letter}: {len(extracted)} records")
+
+            except Exception as e:
+                logger.debug(f"Purdue directory letter={letter} failed: {e}")
+
+        return self._deduplicate(people), urls_scraped
+
+    def _parse_purdue_results(self, html: str, markdown: str, source_url: str) -> list[dict]:
+        """Parse Purdue LDAP directory result page (HTML table or markdown fallback)."""
+        people: list[dict] = []
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(html, "html.parser")
+        # Purdue directory results are in a <table> with rows for each person
+        tables = soup.find_all("table")
+        for table in tables:
+            rows = table.find_all("tr")
+            for row in rows:
+                cells = row.find_all(["td", "th"])
+                if len(cells) < 2:
+                    continue
+                cell_texts = [c.get_text(" ", strip=True) for c in cells]
+                # Look for a row that contains an email address
+                row_text = " ".join(cell_texts)
+                email = self._extract_email(row_text)
+                name = None
+                for ct in cell_texts:
+                    candidate = ct.strip()
+                    if self._is_valid_name(candidate):
+                        name = candidate
+                        break
+                if not name:
+                    continue
+                phone = self._extract_phone(row_text)
+                title = self._extract_title(row_text)
+                tenure_status = self._infer_tenure_status(title, row_text)
+                people.append({
+                    "name": name,
+                    "email": email,
+                    "phone": phone,
+                    "title": title,
+                    "tenure_status": tenure_status,
+                    "bio": None,
+                    "photo_url": None,
+                    "office_location": self._extract_office(row_text),
+                    "institution": self.institution_name,
+                    "source_url": source_url,
+                    "scraped_date": datetime.now().strftime("%Y-%m-%d"),
+                })
+
+        # Markdown fallback if no table results
+        if not people:
+            people = self._parse_directory_content(markdown, html, source_url)
+
+        return people
 
     def _deduplicate(self, people: list[dict]) -> list[dict]:
         seen: dict[str, dict] = {}
