@@ -6,6 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -353,6 +361,265 @@ function JobsTable({
   );
 }
 
+// ─── Scraped Data tab ─────────────────────────────────────────────────────────
+
+type InstructorRow = {
+  id: number;
+  name: string;
+  email: string | null;
+  tenureStatus: string | null;
+  avgRating: number | null;
+  avgDifficulty: number | null;
+  numRatings: number | null;
+  wouldTakeAgainPercent: number | null;
+  department: { name: string; institution: { name: string } } | null;
+};
+
+type CourseRow = {
+  id: number;
+  code: string;
+  name: string;
+  daysOfWeek: string | null;
+  lectureStartTime: string | null;
+  lectureEndTime: string | null;
+  building: string | null;
+  room: string | null;
+};
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <p className="text-sm text-muted-foreground text-center py-10">{text}</p>
+  );
+}
+
+function ScrapedDataTab({
+  institutions,
+  instsLoading,
+  jobs,
+}: {
+  institutions: Institution[] | undefined;
+  instsLoading: boolean;
+  jobs: ScrapeJob[] | undefined;
+}) {
+  const [selectedInstId, setSelectedInstId] = useState<string>("");
+  const instId = selectedInstId ? Number(selectedInstId) : undefined;
+
+  const hasActiveJobs = jobs?.some(
+    (j) => j.institutionId === instId && (j.status === "pending" || j.status === "running")
+  );
+
+  const { data: instructors, isLoading: instructorsLoading } = useQuery<InstructorRow[]>({
+    queryKey: ["/api/instructors", { institutionId: instId }],
+    queryFn: () =>
+      fetch(`/api/instructors?institutionId=${instId}`).then((r) => r.json()),
+    enabled: !!instId,
+    refetchInterval: hasActiveJobs ? 10000 : false,
+  });
+
+  const { data: courses, isLoading: coursesLoading } = useQuery<CourseRow[]>({
+    queryKey: ["/api/courses", { institutionId: instId }],
+    queryFn: () =>
+      fetch(`/api/courses?institutionId=${instId}`).then((r) => r.json()),
+    enabled: !!instId,
+    refetchInterval: hasActiveJobs ? 10000 : false,
+  });
+
+  const rmpRows = (instructors ?? []).filter((i) => i.avgRating != null);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Select value={selectedInstId} onValueChange={setSelectedInstId}>
+          <SelectTrigger className="w-72">
+            <SelectValue placeholder={instsLoading ? "Loading…" : "Select an institution"} />
+          </SelectTrigger>
+          <SelectContent>
+            {(institutions ?? []).map((i) => (
+              <SelectItem key={i.id} value={String(i.id)}>
+                {i.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {hasActiveJobs && (
+          <Badge className="gap-1 bg-blue-500 hover:bg-blue-500 text-white text-xs">
+            <Loader2 className="w-3 h-3 animate-spin" /> Scraping…
+          </Badge>
+        )}
+      </div>
+
+      {!instId ? (
+        <Card>
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            Select an institution to view scraped data.
+          </CardContent>
+        </Card>
+      ) : (
+        <Tabs defaultValue="faculty">
+          <TabsList>
+            <TabsTrigger value="faculty">Faculty</TabsTrigger>
+            <TabsTrigger value="courses">Courses</TabsTrigger>
+            <TabsTrigger value="rmp">RMP Ratings</TabsTrigger>
+          </TabsList>
+
+          {/* ── Faculty tab ── */}
+          <TabsContent value="faculty">
+            <Card>
+              <CardContent className="p-0">
+                {instructorsLoading ? (
+                  <div className="p-4 space-y-2">
+                    {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : !instructors || instructors.length === 0 ? (
+                  <EmptyState text="No data yet — run a scrape first." />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead className="hidden md:table-cell">Department</TableHead>
+                          <TableHead className="hidden lg:table-cell">Email</TableHead>
+                          <TableHead>Tenure</TableHead>
+                          <TableHead className="hidden sm:table-cell">Source</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {instructors.map((inst) => (
+                          <TableRow key={inst.id}>
+                            <TableCell className="font-medium text-sm">{inst.name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground hidden md:table-cell">
+                              {inst.department?.name ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground hidden lg:table-cell">
+                              {inst.email ?? "—"}
+                            </TableCell>
+                            <TableCell>
+                              {inst.tenureStatus ? (
+                                <Badge variant="outline" className="text-xs capitalize">
+                                  {inst.tenureStatus.replace("_", " ")}
+                                </Badge>
+                              ) : "—"}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                              Scraped
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── Courses tab ── */}
+          <TabsContent value="courses">
+            <Card>
+              <CardContent className="p-0">
+                {coursesLoading ? (
+                  <div className="p-4 space-y-2">
+                    {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : !courses || courses.length === 0 ? (
+                  <EmptyState text="No data yet — run a scrape first." />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Code</TableHead>
+                          <TableHead>Name</TableHead>
+                          <TableHead className="hidden sm:table-cell">Days</TableHead>
+                          <TableHead className="hidden sm:table-cell">Time</TableHead>
+                          <TableHead className="hidden md:table-cell">Building / Room</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {courses.map((c) => (
+                          <TableRow key={c.id}>
+                            <TableCell className="font-mono text-sm font-medium">{c.code}</TableCell>
+                            <TableCell className="text-sm">{c.name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">
+                              {c.daysOfWeek ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">
+                              {c.lectureStartTime && c.lectureEndTime
+                                ? `${c.lectureStartTime} – ${c.lectureEndTime}`
+                                : c.lectureStartTime ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground hidden md:table-cell">
+                              {[c.building, c.room].filter(Boolean).join(" ") || "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── RMP tab ── */}
+          <TabsContent value="rmp">
+            <Card>
+              <CardContent className="p-0">
+                {instructorsLoading ? (
+                  <div className="p-4 space-y-2">
+                    {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : rmpRows.length === 0 ? (
+                  <EmptyState text="No RMP data yet — run a scrape first." />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Avg Rating</TableHead>
+                          <TableHead>Difficulty</TableHead>
+                          <TableHead className="hidden sm:table-cell">Ratings</TableHead>
+                          <TableHead className="hidden md:table-cell">Would Take Again</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rmpRows.map((inst) => (
+                          <TableRow key={inst.id}>
+                            <TableCell className="font-medium text-sm">{inst.name}</TableCell>
+                            <TableCell>
+                              <span className={`font-semibold ${inst.avgRating! >= 4 ? "text-green-600" : inst.avgRating! >= 3 ? "text-yellow-600" : "text-red-600"}`}>
+                                {inst.avgRating?.toFixed(1)}
+                              </span>
+                              <span className="text-muted-foreground text-xs"> / 5</span>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {inst.avgDifficulty != null ? inst.avgDifficulty.toFixed(1) : "—"}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">
+                              {inst.numRatings ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground hidden md:table-cell">
+                              {inst.wouldTakeAgainPercent != null
+                                ? `${Math.round(inst.wouldTakeAgainPercent)}%`
+                                : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Pipeline() {
@@ -427,40 +694,57 @@ export default function Pipeline() {
         </p>
       </div>
 
-      <HealthSummary status={pipelineStatus} isLoading={statusLoading} />
+      <Tabs defaultValue="pipeline">
+        <TabsList>
+          <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
+          <TabsTrigger value="scraped">Scraped Data</TabsTrigger>
+        </TabsList>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <InstitutionsPanel
-          institutions={institutions}
-          isLoading={instsLoading}
-          scrapingIds={scrapingIds}
-          onScrape={(id) => scrapeInstitution.mutate(id)}
-        />
+        <TabsContent value="pipeline" className="space-y-6 mt-4">
+          <HealthSummary status={pipelineStatus} isLoading={statusLoading} />
 
-        <Card className="lg:col-span-1">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base text-muted-foreground text-xs font-semibold uppercase tracking-wider">
-              Job types queued per institution
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5">
-            {Object.entries(JOB_TYPE_LABELS).map(([key, label]) => (
-              <div key={key} className="flex items-center gap-2 text-sm">
-                <span className="w-2 h-2 rounded-full bg-primary/60 shrink-0" />
-                <span>{label}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <InstitutionsPanel
+              institutions={institutions}
+              isLoading={instsLoading}
+              scrapingIds={scrapingIds}
+              onScrape={(id) => scrapeInstitution.mutate(id)}
+            />
 
-      <JobsTable
-        jobs={jobs}
-        institutions={institutions}
-        isLoading={jobsLoading}
-        onRetry={(instId) => retryInstitution.mutate(instId)}
-        retryingIds={retryingIds}
-      />
+            <Card className="lg:col-span-1">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+                  Job types queued per institution
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5">
+                {Object.entries(JOB_TYPE_LABELS).map(([key, label]) => (
+                  <div key={key} className="flex items-center gap-2 text-sm">
+                    <span className="w-2 h-2 rounded-full bg-primary/60 shrink-0" />
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+
+          <JobsTable
+            jobs={jobs}
+            institutions={institutions}
+            isLoading={jobsLoading}
+            onRetry={(instId) => retryInstitution.mutate(instId)}
+            retryingIds={retryingIds}
+          />
+        </TabsContent>
+
+        <TabsContent value="scraped" className="mt-4">
+          <ScrapedDataTab
+            institutions={institutions}
+            instsLoading={instsLoading}
+            jobs={jobs}
+          />
+        </TabsContent>
+      </Tabs>
     </Layout>
   );
 }

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, time, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, time, date, pgEnum, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -48,6 +48,10 @@ export const instructors = pgTable("instructors", {
   personalWebsite: text("personal_website"),
   photoUrl: text("photo_url"),
   lastScrapedAt: timestamp("last_scraped_at"),
+  avgRating: real("avg_rating"),
+  avgDifficulty: real("avg_difficulty"),
+  numRatings: integer("num_ratings"),
+  wouldTakeAgainPercent: real("would_take_again_percent"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

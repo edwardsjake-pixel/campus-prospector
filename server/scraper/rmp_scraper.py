@@ -32,10 +32,11 @@ logger = logging.getLogger(__name__)
 
 RMP_GRAPHQL_URL = "https://www.ratemyprofessors.com/graphql"
 RMP_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; CampusAlly/1.0)",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Content-Type": "application/json",
     "Referer": "https://www.ratemyprofessors.com/",
-    "Authorization": "Basic dGVzdDp0ZXN0",  # public anonymous token
+    "Origin": "https://www.ratemyprofessors.com",
+    "Authorization": "Basic dGVzdDp0ZXN0",  # public anonymous token accepted by RMP
 }
 
 SCHOOL_SEARCH_QUERY = """
@@ -100,6 +101,31 @@ query SchoolTeachersQuery($schoolID: ID!, $count: Int!) {
 }
 """
 
+SCHOOL_TEACHERS_QUERY_PAGINATED = """
+query SchoolTeachersQuery($schoolID: ID!, $count: Int!, $cursor: String) {
+  school(id: $schoolID) {
+    teachers(first: $count, after: $cursor) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        node {
+          id
+          firstName
+          lastName
+          department
+          avgRating
+          avgDifficulty
+          numRatings
+          wouldTakeAgainPercent
+        }
+      }
+    }
+  }
+}
+"""
+
 
 class RMPScraper:
     def __init__(
@@ -114,18 +140,24 @@ class RMPScraper:
         self.session = requests.Session()
         self.session.headers.update(RMP_HEADERS)
 
-    def _graphql(self, query: str, variables: dict) -> Optional[dict]:
-        try:
-            resp = self.session.post(
-                RMP_GRAPHQL_URL,
-                json={"query": query, "variables": variables},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            logger.error(f"RMP GraphQL error: {e}")
-            return None
+    def _graphql(self, query: str, variables: dict, retries: int = 3) -> Optional[dict]:
+        for attempt in range(retries):
+            try:
+                resp = self.session.post(
+                    RMP_GRAPHQL_URL,
+                    json={"query": query, "variables": variables},
+                    timeout=20,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if "errors" in data:
+                    logger.warning(f"RMP GraphQL errors: {data['errors']}")
+                return data
+            except Exception as e:
+                logger.error(f"RMP GraphQL error (attempt {attempt+1}/{retries}): {e}")
+                if attempt < retries - 1:
+                    time.sleep(2 ** attempt)
+        return None
 
     def _find_school_id(self, school_name: str) -> Optional[str]:
         data = self._graphql(SCHOOL_SEARCH_QUERY, {"query": school_name})
@@ -172,24 +204,51 @@ class RMPScraper:
             "scraped_at": datetime.now().isoformat(),
         }
 
-    def _scrape_all(self, school_id: str, count: int = 100) -> dict:
-        time.sleep(self.request_delay)
-        data = self._graphql(SCHOOL_TEACHERS_QUERY, {"schoolID": school_id, "count": count})
-        if not data:
-            return {"faculty": [], "records_added": 0, "scraped_at": datetime.now().isoformat()}
+    def _scrape_all(self, school_id: str, count: int = 20) -> dict:
+        """Paginate through all teachers for a school using cursor-based pagination."""
+        all_faculty = []
+        cursor = None
+        page = 0
+        max_pages = 50  # safety cap (~1000 instructors)
 
-        edges = (
-            data.get("data", {})
-            .get("school", {})
-            .get("teachers", {})
-            .get("edges", [])
-        )
-        faculty = [self._node_to_record(e["node"]) for e in edges if e.get("node")]
-        logger.info(f"RMP returned {len(faculty)} instructors for school_id={school_id}")
+        while page < max_pages:
+            time.sleep(self.request_delay)
+            variables = {"schoolID": school_id, "count": count}
+            if cursor:
+                variables["cursor"] = cursor
 
+            data = self._graphql(SCHOOL_TEACHERS_QUERY_PAGINATED, variables)
+            if not data:
+                break
+
+            teachers_data = (
+                data.get("data", {})
+                .get("school", {})
+                .get("teachers", {})
+            )
+            if not teachers_data:
+                break
+
+            edges = teachers_data.get("edges", [])
+            if not edges:
+                break
+
+            batch = [self._node_to_record(e["node"]) for e in edges if e.get("node")]
+            all_faculty.extend(batch)
+            logger.info(f"RMP page {page+1}: {len(batch)} instructors (total={len(all_faculty)})")
+
+            page_info = teachers_data.get("pageInfo", {})
+            if not page_info.get("hasNextPage"):
+                break
+            cursor = page_info.get("endCursor")
+            if not cursor:
+                break
+            page += 1
+
+        logger.info(f"RMP total: {len(all_faculty)} instructors for school_id={school_id}")
         return {
-            "faculty": faculty,
-            "records_added": len(faculty),
+            "faculty": all_faculty,
+            "records_added": len(all_faculty),
             "scraped_at": datetime.now().isoformat(),
         }
 

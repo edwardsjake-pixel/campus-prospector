@@ -71,7 +71,7 @@ export interface IStorage {
   deleteInstructor(id: number): Promise<void>;
 
   // Courses
-  getCourses(instructorId?: number): Promise<Course[]>;
+  getCourses(instructorId?: number, institutionId?: number): Promise<Course[]>;
   createCourse(course: InsertCourse): Promise<Course>;
   updateCourse(id: number, updates: Partial<InsertCourse>): Promise<Course>;
   deleteCourse(id: number): Promise<void>;
@@ -105,6 +105,11 @@ export interface IStorage {
   getAllDeals(): Promise<Deal[]>;
   upsertDeal(deal: InsertDeal): Promise<Deal>;
   deleteDeal(id: number): Promise<void>;
+
+  // Scraper persistence
+  upsertInstructorFromScrape(institutionId: number, item: { name: string; email?: string | null; phone?: string | null; title?: string | null; tenure_status?: string | null; bio?: string | null; photo_url?: string | null; office_location?: string | null }): Promise<Instructor>;
+  updateInstructorRmpData(institutionId: number, name: string, rmpData: { avg_rating?: number | null; avg_difficulty?: number | null; num_ratings?: number | null; would_take_again_percent?: number | null }): Promise<void>;
+  upsertCourseFromScrape(institutionId: number, item: { code: string; name?: string | null; days_of_week?: string | null; start_time?: string | null; end_time?: string | null; building?: string | null; room_number?: string | null; enrollment_count?: number | null; instructor_name?: string | null }): Promise<Course>;
 
   // Lookup
   getInstructorByEmail(email: string): Promise<Instructor | undefined>;
@@ -358,12 +363,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Courses
-  async getCourses(instructorId?: number): Promise<Course[]> {
+  async getCourses(instructorId?: number, institutionId?: number): Promise<Course[]> {
     if (instructorId) {
       const links = await db.select().from(courseInstructors).where(eq(courseInstructors.instructorId, instructorId));
       const courseIds = links.map(l => l.courseId);
       if (courseIds.length === 0) return [];
       return db.select().from(courses).where(inArray(courses.id, courseIds));
+    }
+    if (institutionId) {
+      const deptRows = await db.select().from(departments).where(eq(departments.institutionId, institutionId));
+      const deptIds = deptRows.map(d => d.id);
+      if (deptIds.length === 0) return [];
+      return db.select().from(courses).where(inArray(courses.departmentId, deptIds));
     }
     return await db.select().from(courses);
   }
@@ -500,6 +511,134 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDeal(id: number): Promise<void> {
     await db.delete(deals).where(eq(deals.id, id));
+  }
+
+  // Scraper persistence
+  async upsertInstructorFromScrape(institutionId: number, item: { name: string; email?: string | null; phone?: string | null; title?: string | null; tenure_status?: string | null; bio?: string | null; photo_url?: string | null; office_location?: string | null }): Promise<Instructor> {
+    const dept = await this.findOrCreateDepartment("", "General");
+    // Override departmentId to belong to the correct institution
+    const [instDept] = await db.select().from(departments).where(
+      and(eq(departments.name, "General"), eq(departments.institutionId, institutionId))
+    );
+    let deptId: number;
+    if (instDept) {
+      deptId = instDept.id;
+    } else {
+      const [created] = await db.insert(departments).values({ name: "General", institutionId }).returning();
+      deptId = created.id;
+    }
+
+    const tenureValues = ["tenured", "tenure_track", "adjunct", "visiting", "unknown"];
+    const tenureStatus = tenureValues.includes(item.tenure_status ?? "") ? item.tenure_status as any : "unknown";
+
+    const [existing] = await db.select().from(instructors).where(
+      and(eq(instructors.name, item.name), eq(instructors.departmentId, deptId))
+    );
+
+    if (existing) {
+      const updates: Partial<InsertInstructor> = { lastScrapedAt: new Date() };
+      if (item.email && !existing.email) updates.email = item.email;
+      if (item.phone && !existing.phone) updates.phone = item.phone;
+      if (item.bio && !existing.bio) updates.bio = item.bio;
+      if (item.photo_url && !existing.photoUrl) updates.photoUrl = item.photo_url;
+      if (item.office_location && !existing.officeLocation) updates.officeLocation = item.office_location;
+      if (tenureStatus !== "unknown") updates.tenureStatus = tenureStatus;
+      const [updated] = await db.update(instructors).set(updates).where(eq(instructors.id, existing.id)).returning();
+      return updated;
+    }
+
+    const [created] = await db.insert(instructors).values({
+      name: item.name,
+      email: item.email ?? null,
+      phone: item.phone ?? null,
+      bio: item.bio ?? null,
+      photoUrl: item.photo_url ?? null,
+      officeLocation: item.office_location ?? null,
+      tenureStatus,
+      departmentId: deptId,
+      lastScrapedAt: new Date(),
+    }).returning();
+    return created;
+  }
+
+  async updateInstructorRmpData(institutionId: number, name: string, rmpData: { avg_rating?: number | null; avg_difficulty?: number | null; num_ratings?: number | null; would_take_again_percent?: number | null }): Promise<void> {
+    const deptRows = await db.select().from(departments).where(eq(departments.institutionId, institutionId));
+    const deptIds = deptRows.map(d => d.id);
+    if (deptIds.length === 0) return;
+
+    const [instructor] = await db.select().from(instructors).where(
+      and(eq(instructors.name, name), inArray(instructors.departmentId, deptIds))
+    );
+    if (!instructor) return;
+
+    await db.update(instructors).set({
+      avgRating: rmpData.avg_rating ?? undefined,
+      avgDifficulty: rmpData.avg_difficulty ?? undefined,
+      numRatings: rmpData.num_ratings ?? undefined,
+      wouldTakeAgainPercent: rmpData.would_take_again_percent ?? undefined,
+      lastScrapedAt: new Date(),
+    }).where(eq(instructors.id, instructor.id));
+  }
+
+  async upsertCourseFromScrape(institutionId: number, item: { code: string; name?: string | null; days_of_week?: string | null; start_time?: string | null; end_time?: string | null; building?: string | null; room_number?: string | null; enrollment_count?: number | null; instructor_name?: string | null }): Promise<Course> {
+    const [instDept] = await db.select().from(departments).where(
+      and(eq(departments.name, "General"), eq(departments.institutionId, institutionId))
+    );
+    let deptId: number;
+    if (instDept) {
+      deptId = instDept.id;
+    } else {
+      const [created] = await db.insert(departments).values({ name: "General", institutionId }).returning();
+      deptId = created.id;
+    }
+
+    const [existing] = await db.select().from(courses).where(
+      and(eq(courses.code, item.code), eq(courses.departmentId, deptId))
+    );
+
+    const vals = {
+      code: item.code,
+      name: item.name || item.code,
+      term: "Current",
+      format: "In-Person",
+      daysOfWeek: item.days_of_week ?? null,
+      lectureStartTime: item.start_time ?? null,
+      lectureEndTime: item.end_time ?? null,
+      building: item.building ?? null,
+      room: item.room_number ?? null,
+      enrollment: item.enrollment_count ?? 0,
+      departmentId: deptId,
+    };
+
+    let course: Course;
+    if (existing) {
+      const [updated] = await db.update(courses).set(vals).where(eq(courses.id, existing.id)).returning();
+      course = updated;
+    } else {
+      const [created] = await db.insert(courses).values(vals).returning();
+      course = created;
+    }
+
+    // Link to instructor if provided
+    if (item.instructor_name) {
+      const deptRows = await db.select().from(departments).where(eq(departments.institutionId, institutionId));
+      const deptIds = deptRows.map(d => d.id);
+      const [instructor] = deptIds.length > 0
+        ? await db.select().from(instructors).where(
+            and(eq(instructors.name, item.instructor_name), inArray(instructors.departmentId, deptIds))
+          )
+        : [];
+      if (instructor) {
+        const [existingLink] = await db.select().from(courseInstructors).where(
+          and(eq(courseInstructors.courseId, course.id), eq(courseInstructors.instructorId, instructor.id))
+        );
+        if (!existingLink) {
+          await db.insert(courseInstructors).values({ courseId: course.id, instructorId: instructor.id });
+        }
+      }
+    }
+
+    return course;
   }
 
   async bulkCreateInstructors(items: { name: string; email?: string | null; institutionName?: string | null; departmentName?: string | null; departmentId?: number | null; officeLocation?: string | null; bio?: string | null; notes?: string | null; targetPriority?: string | null }[]): Promise<{ created: Instructor[]; existing: Instructor[]; updated: Instructor[]; skippedCount: number }> {

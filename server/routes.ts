@@ -107,7 +107,8 @@ export async function registerRoutes(
   // === Courses ===
   app.get(api.courses.list.path, async (req, res) => {
     const instructorId = req.query.instructorId ? Number(req.query.instructorId) : undefined;
-    const courses = await storage.getCourses(instructorId);
+    const institutionId = req.query.institutionId ? Number(req.query.institutionId) : undefined;
+    const courses = await storage.getCourses(instructorId, institutionId);
     res.json(courses);
   });
 
@@ -840,6 +841,68 @@ export async function registerRoutes(
         if (stderr) console.log(`[scrape][${job.jobType}] stderr:`, stderr.slice(0, 500));
         const result = JSON.parse(stdout);
         const recordsAdded = result.records_added ?? result.total_found ?? 0;
+
+        // Persist scraped data
+        if (job.jobType === "faculty_directory" || job.jobType === "institution_it") {
+          const faculty: any[] = result.faculty ?? [];
+          for (const item of faculty) {
+            if (!item.name) continue;
+            try {
+              await storage.upsertInstructorFromScrape(institutionId, item);
+            } catch (e) {
+              console.error(`[scrape][${job.jobType}] upsert instructor failed for "${item.name}":`, e);
+            }
+          }
+        } else if (job.jobType === "rmp") {
+          const faculty: any[] = result.faculty ?? [];
+          for (const item of faculty) {
+            if (!item.name) continue;
+            try {
+              await storage.updateInstructorRmpData(institutionId, item.name, {
+                avg_rating: item.avg_rating,
+                avg_difficulty: item.avg_difficulty,
+                num_ratings: item.num_ratings,
+                would_take_again_percent: item.would_take_again_percent,
+              });
+            } catch (e) {
+              console.error(`[scrape][rmp] update rmp failed for "${item.name}":`, e);
+            }
+          }
+        } else if (job.jobType === "course_schedule") {
+          const coursesList: any[] = result.courses ?? [];
+          for (const item of coursesList) {
+            if (!item.code) continue;
+            try {
+              await storage.upsertCourseFromScrape(institutionId, item);
+            } catch (e) {
+              console.error(`[scrape][course_schedule] upsert course failed for "${item.code}":`, e);
+            }
+          }
+        } else if (job.jobType === "syllabus") {
+          const syllabi: any[] = result.syllabi ?? [];
+          for (const item of syllabi) {
+            if (!item.course_code) continue;
+            try {
+              // Find matching course by code across this institution's departments
+              const instCourses = await storage.getCourses(undefined, institutionId);
+              const course = instCourses.find(c => c.code === item.course_code);
+              if (course) {
+                const lmsValues = ["canvas", "blackboard", "d2l", "moodle", "other", "unknown"];
+                const lms = lmsValues.includes(item.lms_platform ?? "") ? item.lms_platform : undefined;
+                await storage.upsertCourseDetails({
+                  courseId: course.id,
+                  textbook: item.textbook ?? null,
+                  courseware: item.courseware ?? null,
+                  lmsPlatform: lms ?? "unknown",
+                  syllabusUrl: item.source_url ?? null,
+                });
+              }
+            } catch (e) {
+              console.error(`[scrape][syllabus] update course details failed for "${item.course_code}":`, e);
+            }
+          }
+        }
+
         await storage.updateScrapeJob(jobId, { status: "complete", completedAt: new Date(), recordsAdded });
       } catch (err: any) {
         await storage.updateScrapeJob(jobId, {

@@ -115,7 +115,6 @@ class CourseScheduleScraper:
                             courses.extend(extracted)
                             urls_scraped.append(url)
                             logger.info(f"Extracted {len(extracted)} course sections from {url}")
-                            break  # found a good source, stop trying candidates
 
                     except Exception as e:
                         logger.debug(f"URL {url} failed: {e}")

@@ -95,7 +95,7 @@ class SyllabusHunter:
                 urls_scraped.append(self.custom_url)
             else:
                 syllabus_urls = await self._find_syllabus_urls(crawler)
-                for url in syllabus_urls[:8]:
+                for url in syllabus_urls[:25]:
                     try:
                         findings = await self._analyze_syllabus_url(crawler, url)
                         all_findings.extend(findings)
@@ -120,10 +120,17 @@ class SyllabusHunter:
 
         for query in self._build_search_queries():
             try:
-                search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}&num=20"
-                logger.info(f"Google search: {query}")
+                # Try DuckDuckGo first (less aggressive bot blocking), fall back to Google
+                search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+                logger.info(f"DuckDuckGo search: {query}")
                 result = await crawler.arun(url=search_url, config=run_config)
                 await asyncio.sleep(self.request_delay)
+                # Fall back to Google if DDG returned nothing useful
+                if not result.success or len(result.markdown or "") < 500:
+                    search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}&num=20"
+                    logger.info(f"Falling back to Google: {query}")
+                    result = await crawler.arun(url=search_url, config=run_config)
+                    await asyncio.sleep(self.request_delay)
 
                 if not result.success:
                     continue

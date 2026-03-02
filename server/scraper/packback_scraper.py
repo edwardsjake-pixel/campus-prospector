@@ -105,7 +105,7 @@ class PackbackScraper:
                 all_urls_scraped.extend(search_urls)
 
                 html_urls = [u for u in search_urls if not u.lower().endswith('.pdf')]
-                html_urls = [u for u in html_urls if self._is_worth_crawling(u)][:8]
+                html_urls = [u for u in html_urls if self._is_worth_crawling(u)][:25]
 
                 for url in html_urls:
                     try:
@@ -133,14 +133,19 @@ class PackbackScraper:
 
         for query in queries:
             try:
-                search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}&num=20"
-                logger.info(f"Google search: {query}")
+                search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+                logger.info(f"DuckDuckGo search: {query}")
 
                 run_config = CrawlerRunConfig(wait_for="css:body")
                 result = await crawler.arun(url=search_url, config=run_config)
 
+                if not result.success or len(result.markdown or "") < 500:
+                    # Fallback to Google
+                    search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}&num=20"
+                    logger.info(f"Falling back to Google: {query}")
+                    result = await crawler.arun(url=search_url, config=run_config)
                 if not result.success:
-                    logger.error(f"Google search failed: {result.error_message}")
+                    logger.error(f"Search failed: {result.error_message}")
                     continue
 
                 markdown = result.markdown if isinstance(result.markdown, str) else str(result.markdown)

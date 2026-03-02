@@ -145,7 +145,7 @@ class FacultyScraper:
         run_config = CrawlerRunConfig(
             wait_for="css:body",
             js_code=["window.scrollTo(0, document.body.scrollHeight);",
-                     "await new Promise(r => setTimeout(r, 1500));"],
+                     "await new Promise(r => setTimeout(r, 2000));"],
         )
         result = await crawler.arun(url=directory_url, config=run_config)
         if not result.success:
@@ -155,13 +155,16 @@ class FacultyScraper:
         html = result.html or ""
         md = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
 
-        people = self._parse_directory_content(md, html, directory_url)
+        # Try structured HTML extraction first (handles modern card-based layouts)
+        people = self._parse_html_cards(html, directory_url)
+        if not people:
+            people = self._parse_directory_content(md, html, directory_url)
 
         # Follow sub-pages (paginated dirs, sub-department pages)
         sub_urls = self._extract_sub_directory_links(md, directory_url)
         urls_scraped = [directory_url]
 
-        for sub_url in sub_urls[:5]:  # cap at 5 sub-pages
+        for sub_url in sub_urls[:30]:  # cap at 30 sub-pages
             try:
                 await asyncio.sleep(self.request_delay)
                 sub_result = await crawler.arun(url=sub_url, config=run_config)
@@ -174,6 +177,92 @@ class FacultyScraper:
                 logger.debug(f"Sub-page {sub_url} failed: {e}")
 
         return self._deduplicate(people), urls_scraped
+
+    def _parse_html_cards(self, html: str, source_url: str) -> list[dict]:
+        """Extract people from structured HTML card layouts (modern university sites)."""
+        from bs4 import BeautifulSoup
+        if not html:
+            return []
+        soup = BeautifulSoup(html, "html.parser")
+        people = []
+
+        # Common card selectors used by university sites
+        card_selectors = [
+            "[class*='faculty']", "[class*='person']", "[class*='people']",
+            "[class*='profile']", "[class*='staff']", "[class*='directory']",
+            "[class*='card']", "[class*='member']", "article",
+            "li[class*='faculty']", "li[class*='person']", "li[class*='profile']",
+            "div[itemtype*='Person']",
+        ]
+
+        candidates = []
+        for selector in card_selectors:
+            try:
+                found = soup.select(selector)
+                if found:
+                    candidates.extend(found)
+            except Exception:
+                continue
+
+        # Deduplicate by element id
+        seen_ids = set()
+        unique_candidates = []
+        for el in candidates:
+            el_id = id(el)
+            if el_id not in seen_ids:
+                seen_ids.add(el_id)
+                unique_candidates.append(el)
+
+        for card in unique_candidates:
+            text = card.get_text(" ", strip=True)
+            if len(text) < 15:
+                continue
+
+            name = None
+            # Try common name element patterns
+            for name_sel in ["h2", "h3", "h4", "[class*='name']", "[class*='title'] a", "strong", "b"]:
+                try:
+                    el = card.select_one(name_sel)
+                    if el:
+                        candidate = el.get_text(" ", strip=True)
+                        if self._is_valid_name(candidate):
+                            name = candidate
+                            break
+                except Exception:
+                    continue
+
+            if not name:
+                name = self._extract_name(text)
+            if not name:
+                continue
+
+            email = self._extract_email(text)
+            phone = self._extract_phone(text)
+            title = self._extract_title(text)
+            tenure_status = self._infer_tenure_status(title, text)
+            bio_snippet = self._extract_bio(text)
+            office = self._extract_office(text)
+
+            # Photo from img inside card
+            img = card.find("img")
+            photo_url = img.get("src") if img else None
+
+            people.append({
+                "name": name,
+                "email": email,
+                "phone": phone,
+                "title": title,
+                "tenure_status": tenure_status,
+                "bio": bio_snippet,
+                "photo_url": photo_url,
+                "office_location": office,
+                "institution": self.institution_name,
+                "source_url": source_url,
+                "scraped_date": datetime.now().strftime("%Y-%m-%d"),
+            })
+
+        logger.info(f"HTML card extraction: {len(people)} people from {source_url}")
+        return people
 
     def _parse_directory_content(self, markdown: str, html: str, source_url: str) -> list[dict]:
         """Extract person records from page content."""
@@ -301,14 +390,35 @@ class FacultyScraper:
     def _extract_sub_directory_links(self, markdown: str, base_url: str) -> list[str]:
         parsed = urlparse(base_url)
         base = f"{parsed.scheme}://{parsed.netloc}"
-        links = re.findall(r'\[([^\]]+)\]\((/[^\)]+)\)', markdown)
+        base_path = parsed.path.rstrip("/")
+
+        # Match both relative and absolute links
+        all_links = re.findall(r'\[([^\]]+)\]\(((?:https?://[^\)]+|/[^\)]+))\)', markdown)
         result = []
-        for _text, path in links:
-            if any(hint in path for hint in DIRECTORY_PATH_HINTS):
-                full = urljoin(base, path)
-                if full != base_url and full not in result:
-                    result.append(full)
-        return result[:10]
+        for _text, href in all_links:
+            if href.startswith("http"):
+                # Only follow same-domain links
+                h_parsed = urlparse(href)
+                if h_parsed.netloc != parsed.netloc:
+                    continue
+                full = href.split("#")[0].split("?")[0]
+            else:
+                full = urljoin(base, href.split("#")[0])
+
+            if full == base_url or full in result:
+                continue
+
+            # Follow: directory hints OR sub-paths of current page OR pagination
+            path = urlparse(full).path
+            is_subpath = path.startswith(base_path + "/") if base_path else False
+            is_hint = any(hint in path for hint in DIRECTORY_PATH_HINTS)
+            is_pagination = re.search(r'[?&](page|p|offset|start)=\d+', full, re.IGNORECASE) is not None
+            has_faculty_keywords = any(kw in path.lower() for kw in ["faculty", "people", "staff", "directory", "department", "dept"])
+
+            if is_hint or is_subpath or is_pagination or has_faculty_keywords:
+                result.append(full)
+
+        return result[:40]
 
     async def _search_single_instructor(self, crawler, name: str) -> Optional[dict]:
         """Google-search for a specific instructor's profile page."""
