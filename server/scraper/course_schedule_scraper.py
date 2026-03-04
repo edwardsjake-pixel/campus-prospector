@@ -26,6 +26,17 @@ from urllib.parse import urlparse, unquote
 import requests
 from bs4 import BeautifulSoup
 
+# Browser rendering fallback for JS-heavy sites
+try:
+    from server.scraper.browser_utils import fetch_rendered_page, is_js_rendered_page, BROWSER_SUPPORT
+except ImportError:
+    try:
+        from browser_utils import fetch_rendered_page, is_js_rendered_page, BROWSER_SUPPORT
+    except ImportError:
+        BROWSER_SUPPORT = False
+        fetch_rendered_page = None
+        is_js_rendered_page = None
+
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
@@ -92,10 +103,29 @@ class CourseScheduleScraper:
         try:
             resp = self.session.get(url, timeout=timeout, allow_redirects=True)
             resp.raise_for_status()
-            return BeautifulSoup(resp.text, "html.parser")
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            # Detect JS-rendered pages and retry with headless browser
+            if BROWSER_SUPPORT and is_js_rendered_page and is_js_rendered_page(soup):
+                logger.info(f"JS-rendered page detected, retrying with browser: {url}")
+                rendered_html = fetch_rendered_page(url)
+                if rendered_html:
+                    return BeautifulSoup(rendered_html, "html.parser")
+
+            return soup
         except Exception as e:
             logger.debug(f"Fetch failed for {url}: {e}")
             return None
+
+    def _fetch_with_browser(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch a URL using headless browser (for JS-heavy sites)."""
+        if not BROWSER_SUPPORT or not fetch_rendered_page:
+            return None
+        logger.info(f"Browser fetch: {url}")
+        html = fetch_rendered_page(url)
+        if html:
+            return BeautifulSoup(html, "html.parser")
+        return None
 
     def scrape(self) -> dict:
         courses: list[dict] = []
@@ -122,6 +152,13 @@ class CourseScheduleScraper:
                     courses.extend(extracted)
                     urls_scraped.append(url)
                     logger.info(f"Extracted {len(extracted)} course sections from {url}")
+
+            # Fallback: try browser rendering for JS-heavy sites
+            if not courses and not self.custom_url and BROWSER_SUPPORT:
+                logger.info(f"Trying browser-rendered scrape for {self.domain}")
+                browser_courses, browser_urls = self._scrape_with_browser()
+                courses.extend(browser_courses)
+                urls_scraped.extend(browser_urls)
 
             # Fallback: use search engine to discover schedule pages
             if not courses and not self.custom_url:
@@ -290,6 +327,37 @@ class CourseScheduleScraper:
             return int(re.sub(r'[^\d]', '', val))
         except (ValueError, TypeError):
             return None
+
+    def _scrape_with_browser(self) -> tuple[list[dict], list[str]]:
+        """Use headless browser to scrape course schedules on JS-heavy sites."""
+        if not BROWSER_SUPPORT or not fetch_rendered_page:
+            return [], []
+
+        courses: list[dict] = []
+        urls_scraped: list[str] = []
+
+        # Try candidate URLs with browser rendering
+        candidate_urls = self._candidate_urls()[:10]
+
+        for url in candidate_urls:
+            if url in urls_scraped:
+                continue
+            soup = self._fetch_with_browser(url)
+            if not soup:
+                continue
+
+            text = soup.get_text(" ", strip=True).lower()
+            if not any(kw in text for kw in ["credit", "lecture", "section", "enrollment", "semester", "course"]):
+                continue
+
+            extracted = self._extract_courses(soup, url)
+            if extracted:
+                courses.extend(extracted)
+                urls_scraped.append(url)
+                logger.info(f"Browser scrape: {len(extracted)} courses from {url}")
+                break  # Found courses, stop trying candidates
+
+        return courses, urls_scraped
 
     def _scrape_via_search_engine(self) -> tuple[list[dict], list[str]]:
         """Use search engine to find and scrape course schedule pages."""

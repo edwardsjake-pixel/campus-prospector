@@ -26,6 +26,17 @@ from urllib.parse import urlparse, urljoin, unquote
 import requests
 from bs4 import BeautifulSoup
 
+# Browser rendering fallback for JS-heavy sites
+try:
+    from server.scraper.browser_utils import fetch_rendered_page, is_js_rendered_page, BROWSER_SUPPORT
+except ImportError:
+    try:
+        from browser_utils import fetch_rendered_page, is_js_rendered_page, BROWSER_SUPPORT
+    except ImportError:
+        BROWSER_SUPPORT = False
+        fetch_rendered_page = None
+        is_js_rendered_page = None
+
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
@@ -90,10 +101,29 @@ class FacultyScraper:
         try:
             resp = self.session.get(url, timeout=timeout, allow_redirects=True)
             resp.raise_for_status()
-            return BeautifulSoup(resp.text, "html.parser")
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            # Detect JS-rendered pages and retry with headless browser
+            if BROWSER_SUPPORT and is_js_rendered_page and is_js_rendered_page(soup):
+                logger.info(f"JS-rendered page detected, retrying with browser: {url}")
+                rendered_html = fetch_rendered_page(url)
+                if rendered_html:
+                    return BeautifulSoup(rendered_html, "html.parser")
+
+            return soup
         except Exception as e:
             logger.debug(f"Fetch failed for {url}: {e}")
             return None
+
+    def _fetch_with_browser(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch a URL using headless browser (for JS-heavy sites)."""
+        if not BROWSER_SUPPORT or not fetch_rendered_page:
+            return None
+        logger.info(f"Browser fetch: {url}")
+        html = fetch_rendered_page(url)
+        if html:
+            return BeautifulSoup(html, "html.parser")
+        return None
 
     def scrape(self) -> dict:
         faculty: list[dict] = []
@@ -127,8 +157,15 @@ class FacultyScraper:
                 faculty.extend(people)
                 urls_scraped.extend(scraped)
 
+            # If we found a URL but got 0 results, try browser rendering
+            if not faculty and BROWSER_SUPPORT:
+                logger.info(f"Trying browser-rendered scrape for {self.domain}")
+                browser_faculty, browser_urls = self._scrape_with_browser()
+                faculty.extend(browser_faculty)
+                urls_scraped.extend(browser_urls)
+
             if not faculty:
-                # Last resort: scrape faculty pages found via search engine
+                # Search engine fallback
                 logger.info(f"Trying search engine scrape for {self.domain}")
                 search_faculty, search_urls = self._scrape_via_search_engine()
                 faculty.extend(search_faculty)
@@ -263,6 +300,58 @@ class FacultyScraper:
                 time.sleep(self.request_delay)
             except Exception as e:
                 logger.debug(f"Search engine scrape failed: {e}")
+
+        return self._deduplicate(people), urls_scraped
+
+    def _scrape_with_browser(self) -> tuple[list[dict], list[str]]:
+        """Use headless browser to scrape faculty directories on JS-heavy sites."""
+        if not BROWSER_SUPPORT or not fetch_rendered_page:
+            return [], []
+
+        people: list[dict] = []
+        urls_scraped: list[str] = []
+
+        # Try the most common directory URLs with browser rendering
+        candidate_urls = self._candidate_urls()[:8]
+
+        # Also try search engine to find the real directory URL first
+        discovered = self._search_engine_discover_directory()
+        if discovered:
+            candidate_urls.insert(0, discovered)
+
+        for url in candidate_urls:
+            if url in urls_scraped:
+                continue
+            soup = self._fetch_with_browser(url)
+            if not soup:
+                continue
+
+            text = soup.get_text(" ", strip=True).lower()
+            if not any(kw in text for kw in ["professor", "faculty", "ph.d", "department"]):
+                continue
+
+            extracted = self._parse_html_cards(soup, url)
+            if not extracted:
+                extracted = self._parse_from_soup(soup, url)
+            if extracted:
+                people.extend(extracted)
+                urls_scraped.append(url)
+                logger.info(f"Browser scrape: {len(extracted)} faculty from {url}")
+
+                # Also follow sub-directory links
+                sub_urls = self._extract_sub_directory_links(soup, url)
+                for sub_url in sub_urls[:15]:
+                    sub_soup = self._fetch_with_browser(sub_url)
+                    if not sub_soup:
+                        continue
+                    sub_people = self._parse_html_cards(sub_soup, sub_url)
+                    if not sub_people:
+                        sub_people = self._parse_from_soup(sub_soup, sub_url)
+                    if sub_people:
+                        people.extend(sub_people)
+                        urls_scraped.append(sub_url)
+
+                break  # Found a working directory, stop trying candidates
 
         return self._deduplicate(people), urls_scraped
 
