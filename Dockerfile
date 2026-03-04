@@ -2,6 +2,11 @@
 FROM node:22-slim AS build
 WORKDIR /app
 
+# Install build tools for native modules (pg, bcrypt, etc.)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN npm ci
 
@@ -12,15 +17,14 @@ RUN npm run build
 FROM node:22-slim AS production
 WORKDIR /app
 
-# Install Python for scrapers
+# Install Python for scrapers + minimal runtime deps
 RUN apt-get update && \
     apt-get install -y --no-install-recommends python3 python3-pip python3-venv && \
     rm -rf /var/lib/apt/lists/*
 
-# Set up Python venv and install scraper deps from pyproject.toml
-COPY pyproject.toml ./
+# Set up Python venv and install scraper deps (playwright excluded — optional, gracefully degrades)
 RUN python3 -m venv /app/.venv && \
-    /app/.venv/bin/pip install --no-cache-dir requests beautifulsoup4 pdfplumber playwright
+    /app/.venv/bin/pip install --no-cache-dir requests beautifulsoup4 pdfplumber
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy built assets and production node_modules

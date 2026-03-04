@@ -1,0 +1,13 @@
+# Tell Railway/Nixpacks this is a Node.js project (not Python)
+# Python is only used for scraper scripts, not the main app
+[phases.setup]
+nixPkgs = ["nodejs_22", "python3", "python3Packages.pip"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "node dist/index.cjs"
