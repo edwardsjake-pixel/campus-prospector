@@ -21,6 +21,7 @@ import argparse
 import time
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlparse, unquote
 
 import requests
 from bs4 import BeautifulSoup
@@ -38,7 +39,10 @@ SESSION_HEADERS = {
 SCHEDULE_PATH_HINTS = [
     "/schedule", "/course-schedule", "/class-schedule", "/courses",
     "/catalog", "/course-catalog", "/academics/courses", "/registrar/schedule",
-    "/registrar/courses", "/class-search",
+    "/registrar/courses", "/class-search", "/schedule-of-classes",
+    "/classes", "/academics/catalog", "/academics/schedule",
+    "/registrar/catalog", "/registrar/class-schedule",
+    "/course-offerings", "/academics", "/academics/course-catalog",
 ]
 
 KNOWN_INSTITUTIONS: dict[str, dict] = {
@@ -78,8 +82,9 @@ class CourseScheduleScraper:
             return []
         urls = []
         for host_prefix in [f"https://www.{self.domain}", f"https://{self.domain}",
-                             f"https://catalog.{self.domain}", f"https://registrar.{self.domain}"]:
-            for path in SCHEDULE_PATH_HINTS[:4]:
+                             f"https://catalog.{self.domain}", f"https://registrar.{self.domain}",
+                             f"https://classes.{self.domain}", f"https://schedule.{self.domain}"]:
+            for path in SCHEDULE_PATH_HINTS[:6]:
                 urls.append(f"{host_prefix}{path}")
         return urls
 
@@ -102,7 +107,7 @@ class CourseScheduleScraper:
         else:
             start_urls = [self.custom_url] if self.custom_url else self._candidate_urls()
 
-            for url in start_urls[:6]:
+            for url in start_urls[:8]:
                 soup = self._fetch(url)
                 time.sleep(self.request_delay)
                 if not soup:
@@ -117,6 +122,13 @@ class CourseScheduleScraper:
                     courses.extend(extracted)
                     urls_scraped.append(url)
                     logger.info(f"Extracted {len(extracted)} course sections from {url}")
+
+            # Fallback: use search engine to discover schedule pages
+            if not courses and not self.custom_url:
+                logger.info(f"Candidate URLs failed for {self.domain}, trying search engine discovery")
+                search_courses, search_urls = self._scrape_via_search_engine()
+                courses.extend(search_courses)
+                urls_scraped.extend(search_urls)
 
         deduped = self._deduplicate(courses)
 
@@ -271,6 +283,72 @@ class CourseScheduleScraper:
             return int(re.sub(r'[^\d]', '', val))
         except (ValueError, TypeError):
             return None
+
+    def _scrape_via_search_engine(self) -> tuple[list[dict], list[str]]:
+        """Use search engine to find and scrape course schedule pages."""
+        queries = [
+            f"site:{self.domain} course schedule classes",
+            f"site:{self.domain} class schedule semester",
+            f"{self.institution_name} course catalog site:{self.domain}",
+        ]
+        courses: list[dict] = []
+        urls_scraped: list[str] = []
+
+        for query in queries:
+            try:
+                search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+                logger.info(f"Search engine discovery: {query}")
+                resp = self.session.get(search_url, timeout=20)
+                if resp.status_code != 200:
+                    time.sleep(self.request_delay)
+                    continue
+
+                soup = BeautifulSoup(resp.text, "html.parser")
+                candidate_urls = self._extract_domain_links_from_search(soup, resp.text)
+
+                for url in candidate_urls[:8]:
+                    if url in urls_scraped:
+                        continue
+                    time.sleep(self.request_delay)
+                    page_soup = self._fetch(url)
+                    if not page_soup:
+                        continue
+
+                    text = page_soup.get_text(" ", strip=True).lower()
+                    if not any(kw in text for kw in ["credit", "lecture", "section", "enrollment", "semester", "course", "schedule"]):
+                        continue
+
+                    extracted = self._extract_courses(page_soup, url)
+                    if extracted:
+                        courses.extend(extracted)
+                        urls_scraped.append(url)
+                        logger.info(f"Search engine scrape: {len(extracted)} courses from {url}")
+
+                time.sleep(self.request_delay)
+            except Exception as e:
+                logger.debug(f"Search engine discovery failed: {e}")
+
+        return courses, urls_scraped
+
+    def _extract_domain_links_from_search(self, soup: BeautifulSoup, raw_html: str) -> list[str]:
+        """Extract links matching self.domain from search result pages."""
+        links: list[str] = []
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"]
+            if "/url?q=" in href:
+                href = href.split("/url?q=")[1].split("&")[0]
+            href = unquote(href).rstrip(".,;:").split("#")[0]
+            if self.domain and self.domain in href and href.startswith("http"):
+                if href not in links and "duckduckgo" not in href and "google" not in href:
+                    links.append(href)
+
+        for u in re.findall(r'https?://[^\s\)\]"\'<>]+', raw_html):
+            u = unquote(u).rstrip(".,;:").split("#")[0]
+            if self.domain and self.domain in u and u not in links:
+                if "duckduckgo" not in u and "google" not in u:
+                    links.append(u)
+
+        return links
 
     def _scrape_banner(self, config: dict) -> tuple[list[dict], list[str]]:
         """Scrape a Banner Self-Service schedule system."""

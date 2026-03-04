@@ -21,7 +21,7 @@ import argparse
 import time
 from datetime import datetime
 from typing import Optional
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, unquote
 
 import requests
 from bs4 import BeautifulSoup
@@ -40,6 +40,9 @@ SESSION_HEADERS = {
 DIRECTORY_PATH_HINTS = [
     "/faculty", "/faculty-staff", "/faculty-directory", "/people",
     "/directory", "/staff", "/about/faculty", "/academics/faculty",
+    "/about/people", "/about/directory", "/our-faculty", "/our-people",
+    "/about-us/faculty", "/departments", "/faculty-and-staff",
+    "/people/faculty", "/directory/faculty",
 ]
 
 # Institution-specific directory URLs that don't follow generic patterns.
@@ -123,7 +126,15 @@ class FacultyScraper:
                 people, scraped = self._crawl_directory(found_dir_url)
                 faculty.extend(people)
                 urls_scraped.extend(scraped)
-            else:
+
+            if not faculty:
+                # Last resort: scrape faculty pages found via search engine
+                logger.info(f"Trying search engine scrape for {self.domain}")
+                search_faculty, search_urls = self._scrape_via_search_engine()
+                faculty.extend(search_faculty)
+                urls_scraped.extend(search_urls)
+
+            if not faculty:
                 logger.warning(f"No faculty directory found for {self.domain}")
 
         return {
@@ -145,7 +156,108 @@ class FacultyScraper:
             if any(kw in text for kw in ["professor", "faculty", "ph.d", "department"]):
                 return url
             time.sleep(self.request_delay)
+
+        # Fallback: use search engine to discover the directory URL
+        logger.info(f"Candidate URLs failed for {self.domain}, trying search engine discovery")
+        return self._search_engine_discover_directory()
+
+    def _search_engine_discover_directory(self) -> Optional[str]:
+        """Use DuckDuckGo to find faculty directory pages for the institution."""
+        queries = [
+            f"site:{self.domain} faculty directory",
+            f"site:{self.domain} people faculty staff",
+            f"{self.institution_name} faculty directory site:{self.domain}",
+        ]
+        for query in queries:
+            try:
+                search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+                logger.info(f"Search engine discovery: {query}")
+                resp = self.session.get(search_url, timeout=20)
+                if resp.status_code != 200:
+                    time.sleep(self.request_delay)
+                    continue
+
+                soup = BeautifulSoup(resp.text, "html.parser")
+                candidate_urls = self._extract_edu_links_from_search(soup, resp.text)
+
+                for candidate in candidate_urls[:5]:
+                    time.sleep(self.request_delay)
+                    page_soup = self._fetch(candidate)
+                    if not page_soup:
+                        continue
+                    text = page_soup.get_text(" ", strip=True).lower()
+                    if any(kw in text for kw in ["professor", "faculty", "ph.d", "department", "staff"]):
+                        logger.info(f"Search engine found directory: {candidate}")
+                        return candidate
+
+                time.sleep(self.request_delay)
+            except Exception as e:
+                logger.debug(f"Search engine discovery failed for query '{query}': {e}")
+
         return None
+
+    def _extract_edu_links_from_search(self, soup: BeautifulSoup, raw_html: str) -> list[str]:
+        """Extract .edu links from search result pages."""
+        links: list[str] = []
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"]
+            if "/url?q=" in href:
+                href = href.split("/url?q=")[1].split("&")[0]
+            href = unquote(href).rstrip(".,;:").split("#")[0]
+            if self.domain and self.domain in href and href.startswith("http"):
+                if href not in links and "duckduckgo" not in href and "google" not in href:
+                    links.append(href)
+
+        # Also scan raw HTML for URLs
+        for u in re.findall(r'https?://[^\s\)\]"\'<>]+', raw_html):
+            u = unquote(u).rstrip(".,;:").split("#")[0]
+            if self.domain and self.domain in u and u not in links:
+                if "duckduckgo" not in u and "google" not in u:
+                    links.append(u)
+
+        return links
+
+    def _scrape_via_search_engine(self) -> tuple[list[dict], list[str]]:
+        """Scrape faculty from individual pages found via search engine queries."""
+        queries = [
+            f"site:{self.domain} professor email department",
+            f"site:{self.domain} faculty profile",
+        ]
+        people: list[dict] = []
+        urls_scraped: list[str] = []
+
+        for query in queries:
+            try:
+                search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+                logger.info(f"Search engine scrape: {query}")
+                resp = self.session.get(search_url, timeout=20)
+                if resp.status_code != 200:
+                    time.sleep(self.request_delay)
+                    continue
+
+                soup = BeautifulSoup(resp.text, "html.parser")
+                candidate_urls = self._extract_edu_links_from_search(soup, resp.text)
+
+                for url in candidate_urls[:10]:
+                    if url in urls_scraped:
+                        continue
+                    time.sleep(self.request_delay)
+                    page_soup = self._fetch(url)
+                    if not page_soup:
+                        continue
+                    extracted = self._parse_html_cards(page_soup, url)
+                    if not extracted:
+                        extracted = self._parse_from_soup(page_soup, url)
+                    if extracted:
+                        people.extend(extracted)
+                        urls_scraped.append(url)
+                        logger.info(f"Search engine scrape: {len(extracted)} people from {url}")
+
+                time.sleep(self.request_delay)
+            except Exception as e:
+                logger.debug(f"Search engine scrape failed: {e}")
+
+        return self._deduplicate(people), urls_scraped
 
     def _crawl_directory(self, directory_url: str) -> tuple[list[dict], list[str]]:
         """Crawl a directory page and extract person cards."""
