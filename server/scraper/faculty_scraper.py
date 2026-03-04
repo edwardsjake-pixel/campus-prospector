@@ -3,6 +3,8 @@
 Crawls a university's faculty/staff directory pages to extract:
   name, email, phone, office, bio, photo_url, research interests, tenure status.
 
+Uses requests + BeautifulSoup (no browser dependency).
+
 Outputs JSON to stdout. Logs to stderr.
 
 Usage:
@@ -10,35 +12,60 @@ Usage:
     python3 server/scraper/faculty_scraper.py --name "Jane Smith"  # single-instructor lookup
 """
 
-import asyncio
 import json
 import logging
 import re
 import sys
 import os
 import argparse
+import time
 from datetime import datetime
 from typing import Optional
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, unquote
 
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+import requests
+from bs4 import BeautifulSoup
+
+# Browser rendering fallback for JS-heavy sites
+try:
+    from server.scraper.browser_utils import fetch_rendered_page, is_js_rendered_page, BROWSER_SUPPORT
+except ImportError:
+    try:
+        from browser_utils import fetch_rendered_page, is_js_rendered_page, BROWSER_SUPPORT
+    except ImportError:
+        BROWSER_SUPPORT = False
+        fetch_rendered_page = None
+        is_js_rendered_page = None
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
+
+SESSION_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 # Common paths universities use for their faculty directories
 DIRECTORY_PATH_HINTS = [
     "/faculty", "/faculty-staff", "/faculty-directory", "/people",
     "/directory", "/staff", "/about/faculty", "/academics/faculty",
+    "/about/people", "/about/directory", "/our-faculty", "/our-people",
+    "/about-us/faculty", "/departments", "/faculty-and-staff",
+    "/people/faculty", "/directory/faculty",
 ]
 
 # Institution-specific directory URLs that don't follow generic patterns.
-# Key: domain (without www), Value: known directory URL or None to skip generic probing.
 KNOWN_INSTITUTIONS: dict[str, dict] = {
     "purdue.edu": {
         "directory_url": "https://www.purdue.edu/directory/",
-        # Purdue's directory is a search interface — we query by department letter
         "search_mode": "purdue_ldap",
+    },
+    "asu.edu": {
+        "directory_url": "https://search.asu.edu/profile",
+        "search_mode": "asu_isearch",
+        "api_url": "https://asudir-solr.asu.edu/asudir/directory/select",
     },
 }
 
@@ -60,60 +87,108 @@ class FacultyScraper:
     ):
         self.domain = domain or ""
         self.institution_name = institution_name or domain or ""
-        self.target_name = target_name  # single-instructor lookup mode
+        self.target_name = target_name
         self.request_delay = request_delay
+        self.session = requests.Session()
+        self.session.headers.update(SESSION_HEADERS)
 
     def _candidate_urls(self) -> list[str]:
         if not self.domain:
             return []
-        base = f"https://www.{self.domain}"
         urls = []
-        for path in DIRECTORY_PATH_HINTS:
-            urls.append(f"{base}{path}")
-        # Also try without www
-        base2 = f"https://{self.domain}"
-        for path in DIRECTORY_PATH_HINTS[:3]:
-            urls.append(f"{base2}{path}")
+        for prefix in [f"https://www.{self.domain}", f"https://{self.domain}"]:
+            for path in DIRECTORY_PATH_HINTS:
+                urls.append(f"{prefix}{path}")
         return urls
 
-    async def scrape(self) -> dict:
-        browser_config = BrowserConfig(headless=True, verbose=False, text_mode=False)
-        faculty = []
-        urls_scraped = []
+    def _fetch(self, url: str, timeout: int = 20) -> Optional[BeautifulSoup]:
+        """Fetch a URL and return parsed soup, or None on failure."""
+        try:
+            resp = self.session.get(url, timeout=timeout, allow_redirects=True)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
 
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-            if self.target_name:
-                # Single-instructor mode: search for the person by name
-                result = await self._search_single_instructor(crawler, self.target_name)
-                return {
-                    "instructor": result,
-                    "scraped_at": datetime.now().isoformat(),
-                    "records_added": 1 if result else 0,
-                }
+            # Detect JS-rendered pages and retry with headless browser
+            if BROWSER_SUPPORT and is_js_rendered_page and is_js_rendered_page(soup):
+                logger.info(f"JS-rendered page detected, retrying with browser: {url}")
+                rendered_html = fetch_rendered_page(url)
+                if rendered_html:
+                    return BeautifulSoup(rendered_html, "html.parser")
 
-            # Check KNOWN_INSTITUTIONS for institution-specific handling
-            known = KNOWN_INSTITUTIONS.get(self.domain, {})
-            if known:
-                search_mode = known.get("search_mode")
-                dir_url = known.get("directory_url")
-                if search_mode == "purdue_ldap":
-                    people, scraped = await self._scrape_purdue_directory(crawler, dir_url)
-                    faculty.extend(people)
-                    urls_scraped.extend(scraped)
-                elif dir_url:
-                    people, scraped = await self._crawl_directory(crawler, dir_url)
-                    faculty.extend(people)
-                    urls_scraped.extend(scraped)
-            else:
-                # Generic: probe candidate URLs
-                found_dir_url = await self._find_directory_url(crawler)
-                if found_dir_url:
-                    logger.info(f"Found directory at: {found_dir_url}")
-                    people, scraped = await self._crawl_directory(crawler, found_dir_url)
-                    faculty.extend(people)
-                    urls_scraped.extend(scraped)
-                else:
-                    logger.warning(f"No faculty directory found for {self.domain}")
+            return soup
+        except Exception as e:
+            logger.debug(f"Fetch failed for {url}: {e}")
+            return None
+
+    def _fetch_with_browser(self, url: str) -> Optional[BeautifulSoup]:
+        """Fetch a URL using headless browser (for JS-heavy sites)."""
+        if not BROWSER_SUPPORT or not fetch_rendered_page:
+            return None
+        logger.info(f"Browser fetch: {url}")
+        html = fetch_rendered_page(url)
+        if html:
+            return BeautifulSoup(html, "html.parser")
+        return None
+
+    def scrape(self) -> dict:
+        faculty: list[dict] = []
+        urls_scraped: list[str] = []
+
+        if self.target_name:
+            result = self._search_single_instructor(self.target_name)
+            return {
+                "instructor": result,
+                "scraped_at": datetime.now().isoformat(),
+                "records_added": 1 if result else 0,
+            }
+
+        known = KNOWN_INSTITUTIONS.get(self.domain, {})
+        if known:
+            search_mode = known.get("search_mode")
+            dir_url = known.get("directory_url")
+            if search_mode == "asu_isearch":
+                people, scraped = self._scrape_asu_isearch(known)
+                faculty.extend(people)
+                urls_scraped.extend(scraped)
+            elif search_mode == "purdue_ldap":
+                people, scraped = self._scrape_purdue_directory(dir_url)
+                faculty.extend(people)
+                urls_scraped.extend(scraped)
+            elif dir_url:
+                people, scraped = self._crawl_directory(dir_url)
+                faculty.extend(people)
+                urls_scraped.extend(scraped)
+        else:
+            found_dir_url = self._find_directory_url()
+            if found_dir_url:
+                logger.info(f"Found directory at: {found_dir_url}")
+                people, scraped = self._crawl_directory(found_dir_url)
+                faculty.extend(people)
+                urls_scraped.extend(scraped)
+
+            # If we found a URL but got 0 results, try browser rendering
+            if not faculty and BROWSER_SUPPORT:
+                logger.info(f"Trying browser-rendered scrape for {self.domain}")
+                browser_faculty, browser_urls = self._scrape_with_browser()
+                faculty.extend(browser_faculty)
+                urls_scraped.extend(browser_urls)
+
+            if not faculty:
+                # Search engine fallback
+                logger.info(f"Trying search engine scrape for {self.domain}")
+                search_faculty, search_urls = self._scrape_via_search_engine()
+                faculty.extend(search_faculty)
+                urls_scraped.extend(search_urls)
+
+            if not faculty:
+                # Final fallback: search for faculty directory PDFs
+                logger.info(f"Trying PDF faculty directory discovery for {self.domain}")
+                pdf_faculty, pdf_urls = self._scrape_pdf_directories()
+                faculty.extend(pdf_faculty)
+                urls_scraped.extend(pdf_urls)
+
+            if not faculty:
+                logger.warning(f"No faculty directory found for {self.domain}")
 
         return {
             "faculty": faculty,
@@ -123,70 +198,247 @@ class FacultyScraper:
             "records_added": len(faculty),
         }
 
-    async def _find_directory_url(self, crawler) -> Optional[str]:
+    def _find_directory_url(self) -> Optional[str]:
         """Try candidate URLs; return the first that looks like a faculty directory."""
         for url in self._candidate_urls():
+            soup = self._fetch(url)
+            if not soup:
+                time.sleep(self.request_delay)
+                continue
+            text = soup.get_text(" ", strip=True).lower()
+            if any(kw in text for kw in ["professor", "faculty", "ph.d", "department"]):
+                return url
+            time.sleep(self.request_delay)
+
+        # Fallback: use search engine to discover the directory URL
+        logger.info(f"Candidate URLs failed for {self.domain}, trying search engine discovery")
+        return self._search_engine_discover_directory()
+
+    def _search_engine_discover_directory(self) -> Optional[str]:
+        """Use DuckDuckGo to find faculty directory pages for the institution."""
+        queries = [
+            f"site:{self.domain} faculty directory",
+            f"site:{self.domain} people faculty staff",
+            f"{self.institution_name} faculty directory site:{self.domain}",
+        ]
+        for query in queries:
             try:
-                run_config = CrawlerRunConfig(wait_for="css:body")
-                result = await crawler.arun(url=url, config=run_config)
-                await asyncio.sleep(self.request_delay)
-                if not result.success:
+                search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+                logger.info(f"Search engine discovery: {query}")
+                resp = self.session.get(search_url, timeout=20)
+                if resp.status_code != 200:
+                    time.sleep(self.request_delay)
                     continue
-                md = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
-                # Check for directory-like content
-                if any(kw in md.lower() for kw in ["professor", "faculty", "ph.d", "department"]):
-                    return url
+
+                soup = BeautifulSoup(resp.text, "html.parser")
+                candidate_urls = self._extract_edu_links_from_search(soup, resp.text)
+
+                for candidate in candidate_urls[:5]:
+                    time.sleep(self.request_delay)
+                    page_soup = self._fetch(candidate)
+                    if not page_soup:
+                        continue
+                    text = page_soup.get_text(" ", strip=True).lower()
+                    if any(kw in text for kw in ["professor", "faculty", "ph.d", "department", "staff"]):
+                        logger.info(f"Search engine found directory: {candidate}")
+                        return candidate
+
+                time.sleep(self.request_delay)
             except Exception as e:
-                logger.debug(f"Candidate {url} failed: {e}")
+                logger.debug(f"Search engine discovery failed for query '{query}': {e}")
+
         return None
 
-    async def _crawl_directory(self, crawler, directory_url: str) -> tuple[list[dict], list[str]]:
-        """Crawl a directory page and extract person cards."""
-        run_config = CrawlerRunConfig(
-            wait_for="css:body",
-            js_code=["window.scrollTo(0, document.body.scrollHeight);",
-                     "await new Promise(r => setTimeout(r, 2000));"],
-        )
-        result = await crawler.arun(url=directory_url, config=run_config)
-        if not result.success:
-            logger.error(f"Failed to crawl {directory_url}: {result.error_message}")
-            return [], []
+    def _extract_edu_links_from_search(self, soup: BeautifulSoup, raw_html: str) -> list[str]:
+        """Extract .edu links from search result pages."""
+        links: list[str] = []
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"]
+            if "/url?q=" in href:
+                href = href.split("/url?q=")[1].split("&")[0]
+            href = unquote(href).rstrip(".,;:").split("#")[0]
+            if self.domain and self.domain in href and href.startswith("http"):
+                if href not in links and "duckduckgo" not in href and "google" not in href:
+                    links.append(href)
 
-        html = result.html or ""
-        md = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
+        # Also scan raw HTML for URLs
+        for u in re.findall(r'https?://[^\s\)\]"\'<>]+', raw_html):
+            u = unquote(u).rstrip(".,;:").split("#")[0]
+            if self.domain and self.domain in u and u not in links:
+                if "duckduckgo" not in u and "google" not in u:
+                    links.append(u)
 
-        # Try structured HTML extraction first (handles modern card-based layouts)
-        people = self._parse_html_cards(html, directory_url)
-        if not people:
-            people = self._parse_directory_content(md, html, directory_url)
+        return links
 
-        # Follow sub-pages (paginated dirs, sub-department pages)
-        sub_urls = self._extract_sub_directory_links(md, directory_url)
-        urls_scraped = [directory_url]
+    def _scrape_via_search_engine(self) -> tuple[list[dict], list[str]]:
+        """Scrape faculty from individual pages found via search engine queries."""
+        queries = [
+            f"site:{self.domain} professor email department",
+            f"site:{self.domain} faculty profile",
+        ]
+        people: list[dict] = []
+        urls_scraped: list[str] = []
 
-        for sub_url in sub_urls[:30]:  # cap at 30 sub-pages
+        for query in queries:
             try:
-                await asyncio.sleep(self.request_delay)
-                sub_result = await crawler.arun(url=sub_url, config=run_config)
-                if sub_result.success:
-                    sub_md = sub_result.markdown if isinstance(sub_result.markdown, str) else str(sub_result.markdown)
-                    sub_people = self._parse_directory_content(sub_md, sub_result.html or "", sub_url)
-                    people.extend(sub_people)
-                    urls_scraped.append(sub_url)
+                search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+                logger.info(f"Search engine scrape: {query}")
+                resp = self.session.get(search_url, timeout=20)
+                if resp.status_code != 200:
+                    time.sleep(self.request_delay)
+                    continue
+
+                soup = BeautifulSoup(resp.text, "html.parser")
+                candidate_urls = self._extract_edu_links_from_search(soup, resp.text)
+
+                for url in candidate_urls[:10]:
+                    if url in urls_scraped:
+                        continue
+                    time.sleep(self.request_delay)
+                    page_soup = self._fetch(url)
+                    if not page_soup:
+                        continue
+                    extracted = self._parse_html_cards(page_soup, url)
+                    if not extracted:
+                        extracted = self._parse_from_soup(page_soup, url)
+                    if extracted:
+                        people.extend(extracted)
+                        urls_scraped.append(url)
+                        logger.info(f"Search engine scrape: {len(extracted)} people from {url}")
+
+                time.sleep(self.request_delay)
             except Exception as e:
-                logger.debug(f"Sub-page {sub_url} failed: {e}")
+                logger.debug(f"Search engine scrape failed: {e}")
 
         return self._deduplicate(people), urls_scraped
 
-    def _parse_html_cards(self, html: str, source_url: str) -> list[dict]:
+    def _scrape_with_browser(self) -> tuple[list[dict], list[str]]:
+        """Use headless browser to scrape faculty directories on JS-heavy sites."""
+        if not BROWSER_SUPPORT or not fetch_rendered_page:
+            return [], []
+
+        people: list[dict] = []
+        urls_scraped: list[str] = []
+
+        # Try the most common directory URLs with browser rendering
+        candidate_urls = self._candidate_urls()[:8]
+
+        # Also try search engine to find the real directory URL first
+        discovered = self._search_engine_discover_directory()
+        if discovered:
+            candidate_urls.insert(0, discovered)
+
+        for url in candidate_urls:
+            if url in urls_scraped:
+                continue
+            soup = self._fetch_with_browser(url)
+            if not soup:
+                continue
+
+            text = soup.get_text(" ", strip=True).lower()
+            if not any(kw in text for kw in ["professor", "faculty", "ph.d", "department"]):
+                continue
+
+            extracted = self._parse_html_cards(soup, url)
+            if not extracted:
+                extracted = self._parse_from_soup(soup, url)
+            if extracted:
+                people.extend(extracted)
+                urls_scraped.append(url)
+                logger.info(f"Browser scrape: {len(extracted)} faculty from {url}")
+
+                # Also follow sub-directory links
+                sub_urls = self._extract_sub_directory_links(soup, url)
+                for sub_url in sub_urls[:15]:
+                    sub_soup = self._fetch_with_browser(sub_url)
+                    if not sub_soup:
+                        continue
+                    sub_people = self._parse_html_cards(sub_soup, sub_url)
+                    if not sub_people:
+                        sub_people = self._parse_from_soup(sub_soup, sub_url)
+                    if sub_people:
+                        people.extend(sub_people)
+                        urls_scraped.append(sub_url)
+
+                break  # Found a working directory, stop trying candidates
+
+        return self._deduplicate(people), urls_scraped
+
+    def _scrape_pdf_directories(self) -> tuple[list[dict], list[str]]:
+        """Search for and parse PDF faculty directories."""
+        try:
+            from server.scraper.pdf_utils import find_pdf_urls_via_search, download_and_extract_text
+        except ImportError:
+            from pdf_utils import find_pdf_urls_via_search, download_and_extract_text
+
+        search_terms_list = [
+            "faculty directory",
+            "faculty staff directory",
+            "department faculty list",
+        ]
+        people: list[dict] = []
+        urls_scraped: list[str] = []
+
+        for search_terms in search_terms_list:
+            pdf_urls = find_pdf_urls_via_search(
+                self.domain, search_terms, session=self.session, max_results=5
+            )
+
+            for pdf_url in pdf_urls:
+                if pdf_url in urls_scraped:
+                    continue
+                time.sleep(self.request_delay)
+                text = download_and_extract_text(pdf_url, session=self.session)
+                if not text:
+                    continue
+
+                # Check this PDF actually contains faculty info
+                text_lower = text.lower()
+                if not any(kw in text_lower for kw in ["professor", "faculty", "ph.d", "department"]):
+                    continue
+
+                extracted = self._parse_from_soup(
+                    BeautifulSoup(f"<pre>{text}</pre>", "html.parser"), pdf_url
+                )
+                if extracted:
+                    people.extend(extracted)
+                    urls_scraped.append(pdf_url)
+                    logger.info(f"PDF scrape: {len(extracted)} faculty from {pdf_url}")
+
+            if people:
+                break
+
+        return self._deduplicate(people), urls_scraped
+
+    def _crawl_directory(self, directory_url: str) -> tuple[list[dict], list[str]]:
+        """Crawl a directory page and extract person cards."""
+        soup = self._fetch(directory_url)
+        if not soup:
+            logger.error(f"Failed to crawl {directory_url}")
+            return [], []
+
+        people = self._parse_html_cards(soup, directory_url)
+        if not people:
+            people = self._parse_from_soup(soup, directory_url)
+
+        sub_urls = self._extract_sub_directory_links(soup, directory_url)
+        urls_scraped = [directory_url]
+
+        for sub_url in sub_urls[:30]:
+            time.sleep(self.request_delay)
+            sub_soup = self._fetch(sub_url)
+            if not sub_soup:
+                continue
+            sub_people = self._parse_from_soup(sub_soup, sub_url)
+            people.extend(sub_people)
+            urls_scraped.append(sub_url)
+
+        return self._deduplicate(people), urls_scraped
+
+    def _parse_html_cards(self, soup: BeautifulSoup, source_url: str) -> list[dict]:
         """Extract people from structured HTML card layouts (modern university sites)."""
-        from bs4 import BeautifulSoup
-        if not html:
-            return []
-        soup = BeautifulSoup(html, "html.parser")
         people = []
 
-        # Common card selectors used by university sites
         card_selectors = [
             "[class*='faculty']", "[class*='person']", "[class*='people']",
             "[class*='profile']", "[class*='staff']", "[class*='directory']",
@@ -204,7 +456,6 @@ class FacultyScraper:
             except Exception:
                 continue
 
-        # Deduplicate by element id
         seen_ids = set()
         unique_candidates = []
         for el in candidates:
@@ -219,7 +470,6 @@ class FacultyScraper:
                 continue
 
             name = None
-            # Try common name element patterns
             for name_sel in ["h2", "h3", "h4", "[class*='name']", "[class*='title'] a", "strong", "b"]:
                 try:
                     el = card.select_one(name_sel)
@@ -243,9 +493,12 @@ class FacultyScraper:
             bio_snippet = self._extract_bio(text)
             office = self._extract_office(text)
 
-            # Photo from img inside card
             img = card.find("img")
-            photo_url = img.get("src") if img else None
+            photo_url = None
+            if img:
+                src = img.get("src") or img.get("data-src")
+                if src:
+                    photo_url = urljoin(source_url, src) if not src.startswith("http") else src
 
             people.append({
                 "name": name,
@@ -264,11 +517,11 @@ class FacultyScraper:
         logger.info(f"HTML card extraction: {len(people)} people from {source_url}")
         return people
 
-    def _parse_directory_content(self, markdown: str, html: str, source_url: str) -> list[dict]:
-        """Extract person records from page content."""
+    def _parse_from_soup(self, soup: BeautifulSoup, source_url: str) -> list[dict]:
+        """Extract person records from page content using text analysis."""
         people = []
-        # Split into blocks by common separators (headings, horizontal rules)
-        blocks = re.split(r'\n#{1,3}\s+', markdown)
+        text = soup.get_text("\n", strip=True)
+        blocks = re.split(r'\n{2,}', text)
 
         for block in blocks:
             if len(block) < 20:
@@ -281,7 +534,6 @@ class FacultyScraper:
             title = self._extract_title(block)
             tenure_status = self._infer_tenure_status(title, block)
             bio_snippet = self._extract_bio(block)
-            photo_url = self._extract_photo_url(html, name)
             office = self._extract_office(block)
 
             people.append({
@@ -291,7 +543,7 @@ class FacultyScraper:
                 "title": title,
                 "tenure_status": tenure_status,
                 "bio": bio_snippet,
-                "photo_url": photo_url,
+                "photo_url": None,
                 "office_location": office,
                 "institution": self.institution_name,
                 "source_url": source_url,
@@ -301,7 +553,6 @@ class FacultyScraper:
         return people
 
     def _extract_name(self, block: str) -> Optional[str]:
-        # Look for "Dr./Prof./Mr./Ms. FirstName LastName" or plain "FirstName LastName"
         patterns = [
             re.compile(r'(?:Dr\.|Prof(?:essor)?\.?|Mr\.|Ms\.|Mrs\.)\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)'),
             re.compile(r'\*\*([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\*\*'),
@@ -322,7 +573,7 @@ class FacultyScraper:
         if len(parts) < 2 or len(parts) > 5:
             return False
         skip = {"university", "college", "department", "contact", "office", "email",
-                "professor", "faculty", "staff", "research", "the", "and", "for"}
+                "professor", "faculty", "research", "the", "and", "for"}
         for p in parts:
             if p.lower() in skip:
                 return False
@@ -358,8 +609,7 @@ class FacultyScraper:
         return "unknown"
 
     def _extract_bio(self, text: str) -> Optional[str]:
-        # Take first substantive paragraph (>80 chars) as bio snippet
-        paras = [p.strip() for p in text.split("\n") if len(p.strip()) > 80]
+        paras = [p.strip() for p in text.split("\n") if len(p.strip()) > 50]
         return paras[0][:500] if paras else None
 
     def _extract_office(self, text: str) -> Optional[str]:
@@ -371,74 +621,62 @@ class FacultyScraper:
             return m.group(1).strip()[:80]
         return None
 
-    def _extract_photo_url(self, html: str, name: str) -> Optional[str]:
-        if not html or not name:
-            return None
-        # Look for img tags near the person's name
-        first_last = name.split()
-        if len(first_last) < 2:
-            return None
-        last = first_last[-1].lower()
-        # Simple heuristic: find img src that contains the last name
-        img_pat = re.compile(r'<img[^>]+src=["\']([^"\']+)["\'][^>]*>', re.IGNORECASE)
-        for m in img_pat.finditer(html):
-            src = m.group(1)
-            if last in src.lower() or "faculty" in src.lower() or "people" in src.lower():
-                return src
-        return None
-
-    def _extract_sub_directory_links(self, markdown: str, base_url: str) -> list[str]:
+    def _extract_sub_directory_links(self, soup: BeautifulSoup, base_url: str) -> list[str]:
         parsed = urlparse(base_url)
-        base = f"{parsed.scheme}://{parsed.netloc}"
         base_path = parsed.path.rstrip("/")
-
-        # Match both relative and absolute links
-        all_links = re.findall(r'\[([^\]]+)\]\(((?:https?://[^\)]+|/[^\)]+))\)', markdown)
         result = []
-        for _text, href in all_links:
+
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"]
+            if href.startswith("#") or href.startswith("mailto:") or href.startswith("tel:"):
+                continue
+
             if href.startswith("http"):
-                # Only follow same-domain links
                 h_parsed = urlparse(href)
                 if h_parsed.netloc != parsed.netloc:
                     continue
                 full = href.split("#")[0].split("?")[0]
             else:
-                full = urljoin(base, href.split("#")[0])
+                full = urljoin(base_url, href.split("#")[0])
 
             if full == base_url or full in result:
                 continue
 
-            # Follow: directory hints OR sub-paths of current page OR pagination
             path = urlparse(full).path
             is_subpath = path.startswith(base_path + "/") if base_path else False
             is_hint = any(hint in path for hint in DIRECTORY_PATH_HINTS)
-            is_pagination = re.search(r'[?&](page|p|offset|start)=\d+', full, re.IGNORECASE) is not None
             has_faculty_keywords = any(kw in path.lower() for kw in ["faculty", "people", "staff", "directory", "department", "dept"])
 
-            if is_hint or is_subpath or is_pagination or has_faculty_keywords:
+            if is_hint or is_subpath or has_faculty_keywords:
                 result.append(full)
 
         return result[:40]
 
-    async def _search_single_instructor(self, crawler, name: str) -> Optional[dict]:
-        """Google-search for a specific instructor's profile page."""
+    def _search_single_instructor(self, name: str) -> Optional[dict]:
+        """Search for a specific instructor using DuckDuckGo."""
         query = f'"{name}" professor site:edu'
-        search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}&num=5"
-        run_config = CrawlerRunConfig(wait_for="css:body")
+        search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
         try:
-            result = await crawler.arun(url=search_url, config=run_config)
-            if not result.success:
+            resp = self.session.get(search_url, timeout=20)
+            if resp.status_code != 200:
                 return None
-            md = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
-            edu_links = re.findall(r'https?://[^\s\)\]"\']*\.edu[^\s\)\]"\']*', md)
-            for link in edu_links[:3]:
-                await asyncio.sleep(self.request_delay)
-                page = await crawler.arun(url=link, config=run_config)
-                if not page.success:
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            # Extract .edu links from search results
+            edu_links = []
+            for a_tag in soup.find_all("a", href=True):
+                href = a_tag["href"]
+                if ".edu" in href and "duckduckgo" not in href:
+                    edu_links.append(href)
+
+            for link in edu_links[:5]:
+                time.sleep(self.request_delay)
+                page_soup = self._fetch(link)
+                if not page_soup:
                     continue
-                page_md = page.markdown if isinstance(page.markdown, str) else str(page.markdown)
-                if name.split()[-1].lower() in page_md.lower():
-                    people = self._parse_directory_content(page_md, page.html or "", link)
+                page_text = page_soup.get_text(" ", strip=True)
+                if name.split()[-1].lower() in page_text.lower():
+                    people = self._parse_from_soup(page_soup, link)
                     match = next((p for p in people if name.split()[-1].lower() in p["name"].lower()), None)
                     if match:
                         return match
@@ -446,33 +684,28 @@ class FacultyScraper:
             logger.error(f"Single instructor search failed: {e}")
         return None
 
-    async def _scrape_purdue_directory(self, crawler, base_url: str) -> tuple[list[dict], list[str]]:
+    def _scrape_purdue_directory(self, base_url: str) -> tuple[list[dict], list[str]]:
         """
-        Purdue's directory at https://www.purdue.edu/directory/ is a search form (LDAP-backed).
-        We query by last-name initial A–Z to enumerate faculty records.
-        Each search returns an HTML table of matching people.
+        Purdue's directory at https://www.purdue.edu/directory/ is a search form.
+        We query by last-name initial A-Z to enumerate faculty records.
         """
         people: list[dict] = []
         urls_scraped: list[str] = []
-        run_config = CrawlerRunConfig(wait_for="css:body")
 
         for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
             search_url = f"{base_url}?search_by=name&query={letter}&submit=Search"
             try:
                 logger.info(f"Purdue directory search: letter={letter}")
-                result = await crawler.arun(url=search_url, config=run_config)
-                await asyncio.sleep(self.request_delay)
-                if not result.success:
+                soup = self._fetch(search_url)
+                time.sleep(self.request_delay)
+                if not soup:
                     continue
 
-                html = result.html or ""
-                md = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
-
-                # Skip pages with no results
-                if "no results" in md.lower() or "no records" in md.lower():
+                text = soup.get_text(" ", strip=True).lower()
+                if "no results" in text or "no records" in text:
                     continue
 
-                extracted = self._parse_purdue_results(html, md, search_url)
+                extracted = self._parse_purdue_results(soup, search_url)
                 if extracted:
                     people.extend(extracted)
                     urls_scraped.append(search_url)
@@ -483,13 +716,10 @@ class FacultyScraper:
 
         return self._deduplicate(people), urls_scraped
 
-    def _parse_purdue_results(self, html: str, markdown: str, source_url: str) -> list[dict]:
-        """Parse Purdue LDAP directory result page (HTML table or markdown fallback)."""
+    def _parse_purdue_results(self, soup: BeautifulSoup, source_url: str) -> list[dict]:
+        """Parse Purdue LDAP directory result page."""
         people: list[dict] = []
-        from bs4 import BeautifulSoup
 
-        soup = BeautifulSoup(html, "html.parser")
-        # Purdue directory results are in a <table> with rows for each person
         tables = soup.find_all("table")
         for table in tables:
             rows = table.find_all("tr")
@@ -498,7 +728,6 @@ class FacultyScraper:
                 if len(cells) < 2:
                     continue
                 cell_texts = [c.get_text(" ", strip=True) for c in cells]
-                # Look for a row that contains an email address
                 row_text = " ".join(cell_texts)
                 email = self._extract_email(row_text)
                 name = None
@@ -526,11 +755,145 @@ class FacultyScraper:
                     "scraped_date": datetime.now().strftime("%Y-%m-%d"),
                 })
 
-        # Markdown fallback if no table results
         if not people:
-            people = self._parse_directory_content(markdown, html, source_url)
+            people = self._parse_from_soup(soup, source_url)
 
         return people
+
+    def _scrape_asu_isearch(self, config: dict) -> tuple[list[dict], list[str]]:
+        """Scrape Arizona State University faculty via iSearch/Solr API."""
+        api_url = config.get("api_url", "https://asudir-solr.asu.edu/asudir/directory/select")
+        dir_url = config.get("directory_url", "https://search.asu.edu/profile")
+        people: list[dict] = []
+        urls_scraped: list[str] = []
+
+        # Search for faculty/professors across key departments
+        dept_queries = [
+            "professor",
+            "associate professor",
+            "assistant professor",
+            "lecturer",
+            "instructor",
+        ]
+
+        for query in dept_queries:
+            try:
+                time.sleep(self.request_delay)
+                params = {
+                    "q": query,
+                    "fq": "affiliations:Faculty",
+                    "rows": 200,
+                    "start": 0,
+                    "wt": "json",
+                    "fl": "displayName,emailAddress,phone,primaryTitle,bio,photoUrl,buildingName,roomNumber,deptids,primaryDeptName",
+                }
+                logger.info(f"ASU iSearch: querying '{query}'")
+                resp = self.session.get(api_url, params=params, timeout=30)
+
+                if resp.status_code != 200:
+                    logger.debug(f"ASU iSearch query '{query}': HTTP {resp.status_code}")
+                    # Fallback: try scraping iSearch web pages
+                    continue
+
+                data = resp.json()
+                docs = data.get("response", {}).get("docs", [])
+                logger.info(f"ASU iSearch '{query}': {len(docs)} results")
+
+                for doc in docs:
+                    person = self._parse_asu_faculty(doc, dir_url)
+                    if person:
+                        people.append(person)
+
+                if docs:
+                    urls_scraped.append(f"{api_url}?q={query}")
+
+            except Exception as e:
+                logger.debug(f"ASU iSearch query '{query}' failed: {e}")
+
+        # Fallback: try browser-based scraping of iSearch web UI
+        if not people and BROWSER_SUPPORT:
+            logger.info("ASU iSearch API failed, trying browser fallback on web UI")
+            asu_faculty_urls = [
+                "https://search.asu.edu/profile?dept=&campus=TEMPE&title=professor",
+                "https://isearch.asu.edu/asu-people?dept_id=&title=professor",
+                f"https://www.asu.edu/faculty",
+                f"https://www.asu.edu/about/faculty",
+            ]
+            for url in asu_faculty_urls:
+                soup = self._fetch_with_browser(url)
+                if not soup:
+                    continue
+                text = soup.get_text(" ", strip=True).lower()
+                if any(kw in text for kw in ["professor", "faculty", "ph.d"]):
+                    extracted = self._parse_html_cards(soup, url)
+                    if not extracted:
+                        extracted = self._parse_from_soup(soup, url)
+                    if extracted:
+                        people.extend(extracted)
+                        urls_scraped.append(url)
+                        logger.info(f"ASU browser fallback: {len(extracted)} faculty from {url}")
+                        break
+
+        # Final fallback: search engine discovery
+        if not people:
+            logger.info("ASU: falling back to search engine discovery")
+            search_people, search_urls = self._scrape_via_search_engine()
+            people.extend(search_people)
+            urls_scraped.extend(search_urls)
+
+        return self._deduplicate(people), urls_scraped
+
+    def _parse_asu_faculty(self, doc: dict, base_url: str) -> Optional[dict]:
+        """Parse a single ASU iSearch Solr document into a faculty record."""
+        name = doc.get("displayName", "")
+        if not name or not self._is_valid_name(name):
+            return None
+
+        email = doc.get("emailAddress", "")
+        if isinstance(email, list):
+            email = email[0] if email else ""
+
+        phone = doc.get("phone", "")
+        if isinstance(phone, list):
+            phone = phone[0] if phone else ""
+
+        title = doc.get("primaryTitle", "")
+        if isinstance(title, list):
+            title = title[0] if title else ""
+
+        bio = doc.get("bio", "")
+        if isinstance(bio, list):
+            bio = bio[0] if bio else ""
+        if bio:
+            bio = re.sub(r'<[^>]+>', '', bio)[:500]  # Strip HTML tags
+
+        photo_url = doc.get("photoUrl", "")
+        if isinstance(photo_url, list):
+            photo_url = photo_url[0] if photo_url else ""
+
+        building = doc.get("buildingName", "")
+        room = doc.get("roomNumber", "")
+        if isinstance(building, list):
+            building = building[0] if building else ""
+        if isinstance(room, list):
+            room = room[0] if room else ""
+        office = f"{building} {room}".strip() if (building or room) else None
+
+        tenure_status = self._infer_tenure_status(title, (title or "") + " " + (bio or ""))
+
+        return {
+            "name": name,
+            "email": email or None,
+            "phone": phone or None,
+            "title": title or None,
+            "tenure_status": tenure_status,
+            "bio": bio or None,
+            "photo_url": photo_url or None,
+            "office_location": office,
+            "institution": self.institution_name,
+            "source_url": base_url,
+            "scraped_date": datetime.now().strftime("%Y-%m-%d"),
+        }
 
     def _deduplicate(self, people: list[dict]) -> list[dict]:
         seen: dict[str, dict] = {}
@@ -545,7 +908,7 @@ class FacultyScraper:
         return list(seen.values())
 
 
-async def main():
+def main():
     parser = argparse.ArgumentParser(description="Scrape faculty directory for a university")
     parser.add_argument("--domain", type=str, default=None)
     parser.add_argument("--institution-name", type=str, default=None)
@@ -562,7 +925,7 @@ async def main():
         target_name=args.name,
         request_delay=args.delay,
     )
-    results = await scraper.scrape()
+    results = scraper.scrape()
 
     sys.stdout.close()
     sys.stdout = old_stdout
@@ -570,4 +933,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

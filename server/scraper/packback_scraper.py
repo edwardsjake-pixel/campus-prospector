@@ -1,8 +1,10 @@
-"""Crawl4AI-powered scraper for finding faculty who use Packback.
+"""Scraper for finding faculty who use Packback.
 
-Searches university websites via Google site-search to find syllabi, course pages,
-and department pages that mention Packback. Extracts instructor names, courses,
-and departments from both search result snippets and crawled pages.
+Searches university websites via DuckDuckGo/Google site-search to find syllabi,
+course pages, and department pages that mention Packback. Extracts instructor
+names, courses, and departments from both search result snippets and crawled pages.
+
+Uses requests + BeautifulSoup (no browser dependency).
 
 Outputs JSON to stdout for consumption by the Node.js backend.
 
@@ -10,21 +12,29 @@ Usage:
     python3 server/scraper/packback_scraper.py [--urls URL1 URL2 ...] [--domain purdue.edu] [--institution-name "Purdue University"]
 """
 
-import asyncio
 import json
 import logging
 import re
 import sys
 import os
 import argparse
+import time
 from datetime import datetime
 from typing import Optional
 from urllib.parse import urlparse, unquote
 
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+import requests
+from bs4 import BeautifulSoup
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
+
+SESSION_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
 class PackbackScraper:
@@ -41,6 +51,8 @@ class PackbackScraper:
         self.domain = domain
         self.institution_name = institution_name or ""
         self.request_delay = request_delay
+        self.session = requests.Session()
+        self.session.headers.update(SESSION_HEADERS)
 
     def _get_search_queries(self) -> list[str]:
         if self.domain:
@@ -71,50 +83,53 @@ class PackbackScraper:
                 return name
         return self.institution_name or ""
 
-    async def scrape(self) -> dict:
-        browser_config = BrowserConfig(
-            headless=True,
-            verbose=False,
-            text_mode=True,
-        )
+    def _fetch(self, url: str, timeout: int = 20) -> Optional[str]:
+        """Fetch URL and return text content, or None on failure."""
+        try:
+            resp = self.session.get(url, timeout=timeout, allow_redirects=True)
+            resp.raise_for_status()
+            return resp.text
+        except Exception as e:
+            logger.debug(f"Fetch failed for {url}: {e}")
+            return None
 
-        all_faculty = []
-        all_urls_scraped = []
+    def scrape(self) -> dict:
+        all_faculty: list[dict] = []
+        all_urls_scraped: list[str] = []
 
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-            if self.custom_urls:
-                html_urls = [u for u in self.custom_urls if not u.lower().endswith('.pdf')]
-                for url in html_urls:
-                    try:
-                        logger.info(f"Scraping custom URL: {url}")
-                        faculty = await self._scrape_html_page(crawler, url)
-                        all_faculty.extend(faculty)
-                        all_urls_scraped.append(url)
-                        await asyncio.sleep(self.request_delay)
-                    except Exception as e:
-                        logger.error(f"Error scraping {url}: {e}")
-
-                pdf_urls = [u for u in self.custom_urls if u.lower().endswith('.pdf')]
-                for url in pdf_urls:
-                    faculty = self._extract_from_url_path(url)
+        if self.custom_urls:
+            html_urls = [u for u in self.custom_urls if not u.lower().endswith('.pdf')]
+            for url in html_urls:
+                try:
+                    logger.info(f"Scraping custom URL: {url}")
+                    faculty = self._scrape_html_page(url)
                     all_faculty.extend(faculty)
                     all_urls_scraped.append(url)
-            else:
-                search_faculty, search_urls = await self._search_and_extract(crawler)
-                all_faculty.extend(search_faculty)
-                all_urls_scraped.extend(search_urls)
+                    time.sleep(self.request_delay)
+                except Exception as e:
+                    logger.error(f"Error scraping {url}: {e}")
 
-                html_urls = [u for u in search_urls if not u.lower().endswith('.pdf')]
-                html_urls = [u for u in html_urls if self._is_worth_crawling(u)][:25]
+            pdf_urls = [u for u in self.custom_urls if u.lower().endswith('.pdf')]
+            for url in pdf_urls:
+                faculty = self._extract_from_url_path(url)
+                all_faculty.extend(faculty)
+                all_urls_scraped.append(url)
+        else:
+            search_faculty, search_urls = self._search_and_extract()
+            all_faculty.extend(search_faculty)
+            all_urls_scraped.extend(search_urls)
 
-                for url in html_urls:
-                    try:
-                        logger.info(f"Crawling page: {url}")
-                        faculty = await self._scrape_html_page(crawler, url)
-                        all_faculty.extend(faculty)
-                        await asyncio.sleep(self.request_delay)
-                    except Exception as e:
-                        logger.error(f"Error scraping {url}: {e}")
+            html_urls = [u for u in search_urls if not u.lower().endswith('.pdf')]
+            html_urls = [u for u in html_urls if self._is_worth_crawling(u)][:25]
+
+            for url in html_urls:
+                try:
+                    logger.info(f"Crawling page: {url}")
+                    faculty = self._scrape_html_page(url)
+                    all_faculty.extend(faculty)
+                    time.sleep(self.request_delay)
+                except Exception as e:
+                    logger.error(f"Error scraping {url}: {e}")
 
         all_faculty = self._deduplicate(all_faculty)
 
@@ -125,36 +140,34 @@ class PackbackScraper:
             "total_found": len(all_faculty),
         }
 
-    async def _search_and_extract(self, crawler) -> tuple[list[dict], list[str]]:
+    def _search_and_extract(self) -> tuple[list[dict], list[str]]:
         queries = self._get_search_queries()
-
-        all_faculty = []
-        all_urls = []
+        all_faculty: list[dict] = []
+        all_urls: list[str] = []
 
         for query in queries:
             try:
                 search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
                 logger.info(f"DuckDuckGo search: {query}")
 
-                run_config = CrawlerRunConfig(wait_for="css:body")
-                result = await crawler.arun(url=search_url, config=run_config)
+                html = self._fetch(search_url)
 
-                if not result.success or len(result.markdown or "") < 500:
-                    # Fallback to Google
+                if not html or len(html) < 500:
                     search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}&num=20"
                     logger.info(f"Falling back to Google: {query}")
-                    result = await crawler.arun(url=search_url, config=run_config)
-                if not result.success:
-                    logger.error(f"Search failed: {result.error_message}")
+                    html = self._fetch(search_url)
+
+                if not html:
                     continue
 
-                markdown = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
+                soup = BeautifulSoup(html, "html.parser")
+                page_text = soup.get_text(" ", strip=True)
 
-                links = self._extract_university_links(markdown)
+                links = self._extract_university_links(soup, html)
                 all_urls.extend(links)
                 logger.info(f"Found {len(links)} university links")
 
-                search_faculty = self._extract_from_search_results(markdown, links)
+                search_faculty = self._extract_from_search_results(page_text, links)
                 all_faculty.extend(search_faculty)
                 logger.info(f"Extracted {len(search_faculty)} faculty from search snippets")
 
@@ -163,60 +176,40 @@ class PackbackScraper:
                         url_faculty = self._extract_from_url_path(link)
                         all_faculty.extend(url_faculty)
 
-                await asyncio.sleep(self.request_delay)
+                time.sleep(self.request_delay)
 
             except Exception as e:
-                logger.error(f"Error in Google search '{query}': {e}")
+                logger.error(f"Error in search '{query}': {e}")
 
         return all_faculty, list(dict.fromkeys(all_urls))
 
-    def _extract_from_search_results(self, markdown: str, links: list[str]) -> list[dict]:
+    def _extract_from_search_results(self, text: str, links: list[str]) -> list[dict]:
         faculty = []
 
-        result_blocks = re.split(r'\n###\s', markdown)
-        for block in result_blocks:
-            if not any(kw in block.lower() for kw in ["packback"]):
-                continue
+        # Check if text mentions packback at all
+        if "packback" not in text.lower():
+            return []
 
-            block_url = ""
-            for link in links:
-                clean_link = link.split('?')[0].rstrip('/')
-                if clean_link in block or unquote(clean_link) in block:
-                    block_url = link
-                    break
+        for link in links:
+            institution = self._detect_institution_from_url(link)
+            names = self._extract_instructor_names(text)
+            courses = self._extract_courses(text)
+            department = self._extract_department(text)
 
-            if not block_url:
-                url_pattern = r'https?://[^\s\)\]"\']+\.edu[^\s\)\]"\']*'
-                url_match = re.search(url_pattern, block)
-                if url_match:
-                    block_url = url_match.group(0).rstrip('.,;:').split('#')[0]
-
-            if not block_url or 'google.com' in block_url or 'accounts.google' in block_url:
-                continue
-
-            institution = self._detect_institution_from_url(block_url)
-
-            names = self._extract_instructor_names(block)
-            url_names = self._extract_from_url_path(block_url) if block_url else []
-
-            all_names = list(dict.fromkeys(
-                [n for n in names] + [f["name"] for f in url_names]
-            ))
-
-            courses = self._extract_courses(block)
-            department = self._extract_department(block)
-
-            for name in all_names:
+            for name in names:
                 faculty.append({
                     "name": name,
                     "email": "",
                     "institution": institution,
                     "department": department,
                     "course": ", ".join(courses[:3]),
-                    "source_url": block_url,
+                    "source_url": link,
                     "scraped_date": datetime.now().strftime("%Y-%m-%d"),
                     "notes": f"Uses Packback. {'; '.join(courses[:3])}".strip().rstrip('.'),
                 })
+            # Only extract from first few links to avoid noise
+            if len(faculty) >= 10:
+                break
 
         return faculty
 
@@ -260,8 +253,8 @@ class PackbackScraper:
             code = f"{prefix} {num}"
             if prefix not in skip_prefixes and code not in courses:
                 courses.append(code)
-        department = ""
 
+        department = ""
         dept_hints = {
             "phil": "Philosophy", "hist": "History", "clcs": "Classics",
             "eaps": "Earth & Atmospheric Sciences", "engl": "English",
@@ -289,7 +282,7 @@ class PackbackScraper:
 
         return faculty
 
-    def _extract_university_links(self, markdown: str) -> list[str]:
+    def _extract_university_links(self, soup: BeautifulSoup, raw_html: str) -> list[str]:
         links = []
         target_domains = []
         if self.domain:
@@ -297,15 +290,24 @@ class PackbackScraper:
         else:
             target_domains.extend(["purdue.edu", "indiana.edu", "iu.edu"])
 
-        all_urls = re.findall(r'https?://[^\s\)\]"\']+', markdown)
-        for url in all_urls:
-            url = url.rstrip('.,;:')
-            url = url.split('#')[0]
-
-            parsed = urlparse(url)
-            if 'google' in parsed.netloc:
+        # From anchor tags
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"]
+            if "/url?q=" in href:
+                href = href.split("/url?q=")[1].split("&")[0]
+            href = unquote(href).rstrip(".,;:").split("#")[0]
+            if "google" in urlparse(href).netloc:
                 continue
+            if any(domain in href for domain in target_domains):
+                if href not in links:
+                    links.append(href)
 
+        # Also scan raw text for URLs
+        all_urls = re.findall(r'https?://[^\s\)\]"\'<>]+', raw_html)
+        for url in all_urls:
+            url = unquote(url).rstrip(".,;:").split("#")[0]
+            if "google" in urlparse(url).netloc:
+                continue
             if any(domain in url for domain in target_domains):
                 if url not in links:
                     links.append(url)
@@ -317,37 +319,27 @@ class PackbackScraper:
         path = parsed.path.rstrip('/')
         if not path or path == '/':
             return False
-        if url.lower().endswith('.pdf'):
-            return False
-        if url.lower().endswith(('.docx', '.doc', '.pptx', '.xlsx')):
+        if url.lower().endswith(('.pdf', '.docx', '.doc', '.pptx', '.xlsx')):
             return False
         return True
 
-    async def _scrape_html_page(self, crawler, url: str) -> list[dict]:
-        run_config = CrawlerRunConfig(
-            wait_for="css:body",
-            js_code=[
-                "window.scrollTo(0, document.body.scrollHeight);",
-                "await new Promise(r => setTimeout(r, 1000));",
-            ],
-        )
-
-        result = await crawler.arun(url=url, config=run_config)
-        if not result.success:
-            logger.error(f"Failed to crawl {url}: {result.error_message}")
+    def _scrape_html_page(self, url: str) -> list[dict]:
+        html = self._fetch(url)
+        if not html:
             return []
 
-        markdown = result.markdown if isinstance(result.markdown, str) else str(result.markdown)
+        soup = BeautifulSoup(html, "html.parser")
+        text = soup.get_text(" ", strip=True)
 
-        if not any(kw in markdown.lower() for kw in ["packback"]):
+        if "packback" not in text.lower():
             logger.info(f"No Packback mention on {url}")
             return []
 
         institution = self._detect_institution_from_url(url)
-        names = self._extract_instructor_names(markdown)
-        courses = self._extract_courses(markdown)
-        department = self._extract_department(markdown)
-        emails = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', markdown)
+        names = self._extract_instructor_names(text)
+        courses = self._extract_courses(text)
+        department = self._extract_department(text)
+        emails = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', text)
 
         faculty = []
         for i, name in enumerate(names):
@@ -485,13 +477,13 @@ class PackbackScraper:
         return unique
 
 
-async def main():
+def main():
     parser = argparse.ArgumentParser(
         description="Scrape university sites for faculty who use Packback"
     )
     parser.add_argument(
         "--urls", nargs="*", default=None,
-        help="Custom university URLs to scrape (skips Google search)",
+        help="Custom university URLs to scrape (skips search)",
     )
     parser.add_argument(
         "--domain", type=str, default=None,
@@ -532,7 +524,7 @@ async def main():
         request_delay=args.delay,
     )
 
-    results = await scraper.scrape()
+    results = scraper.scrape()
 
     sys.stdout.close()
     sys.stdout = old_stdout
@@ -540,4 +532,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
