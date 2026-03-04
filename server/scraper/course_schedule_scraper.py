@@ -130,6 +130,13 @@ class CourseScheduleScraper:
                 courses.extend(search_courses)
                 urls_scraped.extend(search_urls)
 
+            # Fallback: search for schedule PDFs (many schools publish full-semester PDFs)
+            if not courses and not self.custom_url:
+                logger.info(f"Trying PDF schedule discovery for {self.domain}")
+                pdf_courses, pdf_urls = self._scrape_pdf_schedules()
+                courses.extend(pdf_courses)
+                urls_scraped.extend(pdf_urls)
+
         deduped = self._deduplicate(courses)
 
         return {
@@ -349,6 +356,45 @@ class CourseScheduleScraper:
                     links.append(u)
 
         return links
+
+    def _scrape_pdf_schedules(self) -> tuple[list[dict], list[str]]:
+        """Search for and parse PDF schedule documents."""
+        try:
+            from server.scraper.pdf_utils import find_pdf_urls_via_search, download_and_extract_text
+        except ImportError:
+            from pdf_utils import find_pdf_urls_via_search, download_and_extract_text
+
+        search_terms_list = [
+            "course schedule",
+            "class schedule semester",
+            "schedule of classes",
+        ]
+        courses: list[dict] = []
+        urls_scraped: list[str] = []
+
+        for search_terms in search_terms_list:
+            pdf_urls = find_pdf_urls_via_search(
+                self.domain, search_terms, session=self.session, max_results=5
+            )
+
+            for pdf_url in pdf_urls:
+                if pdf_url in urls_scraped:
+                    continue
+                time.sleep(self.request_delay)
+                text = download_and_extract_text(pdf_url, session=self.session)
+                if not text:
+                    continue
+
+                extracted = self._extract_from_text(text, pdf_url)
+                if extracted:
+                    courses.extend(extracted)
+                    urls_scraped.append(pdf_url)
+                    logger.info(f"PDF scrape: {len(extracted)} courses from {pdf_url}")
+
+            if courses:
+                break  # Found courses in a PDF, no need to keep searching
+
+        return courses, urls_scraped
 
     def _scrape_banner(self, config: dict) -> tuple[list[dict], list[str]]:
         """Scrape a Banner Self-Service schedule system."""

@@ -184,22 +184,9 @@ class SyllabusHunter:
         return any(hint in url_lower for hint in syllabus_hints)
 
     def _analyze_syllabus_url(self, url: str) -> list[dict]:
-        # Skip PDFs — we can't parse them with requests alone
+        # Try to parse PDFs using pdfplumber
         if url.lower().endswith(".pdf"):
-            # Still extract course code from the URL itself
-            course_code = self._extract_course_code(url, "")
-            if course_code:
-                return [{
-                    "source_url": url,
-                    "course_code": course_code,
-                    "textbook": None,
-                    "textbook_isbn": None,
-                    "courseware": None,
-                    "lms_platform": None,
-                    "institution": self.institution_name,
-                    "scraped_date": datetime.now().strftime("%Y-%m-%d"),
-                }]
-            return []
+            return self._analyze_pdf_syllabus(url)
 
         html = self._fetch(url)
         if not html:
@@ -227,6 +214,53 @@ class SyllabusHunter:
             "institution": self.institution_name,
             "scraped_date": datetime.now().strftime("%Y-%m-%d"),
         }]
+
+    def _analyze_pdf_syllabus(self, url: str) -> list[dict]:
+        """Extract syllabus data from a PDF file."""
+        download_and_extract_text = None
+        try:
+            from server.scraper.pdf_utils import download_and_extract_text
+        except ImportError:
+            try:
+                from pdf_utils import download_and_extract_text
+            except ImportError:
+                pass
+
+        if download_and_extract_text is not None:
+            text = download_and_extract_text(url, session=self.session, max_pages=20)
+            if text:
+                courseware = self._detect_courseware(text)
+                lms = self._detect_lms(text)
+                textbooks = self._extract_textbooks(text)
+                isbns = ISBN_PATTERN.findall(text)
+                course_code = self._extract_course_code(url, text)
+
+                if courseware or lms or textbooks:
+                    return [{
+                        "source_url": url,
+                        "course_code": course_code,
+                        "textbook": textbooks[0] if textbooks else None,
+                        "textbook_isbn": isbns[0] if isbns else None,
+                        "courseware": ", ".join(courseware) if courseware else None,
+                        "lms_platform": lms,
+                        "institution": self.institution_name,
+                        "scraped_date": datetime.now().strftime("%Y-%m-%d"),
+                    }]
+
+        # Fallback: extract what we can from the URL path
+        course_code = self._extract_course_code(url, "")
+        if course_code:
+            return [{
+                "source_url": url,
+                "course_code": course_code,
+                "textbook": None,
+                "textbook_isbn": None,
+                "courseware": None,
+                "lms_platform": None,
+                "institution": self.institution_name,
+                "scraped_date": datetime.now().strftime("%Y-%m-%d"),
+            }]
+        return []
 
     def _detect_courseware(self, text: str) -> list[str]:
         found = []

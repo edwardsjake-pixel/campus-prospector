@@ -135,6 +135,13 @@ class FacultyScraper:
                 urls_scraped.extend(search_urls)
 
             if not faculty:
+                # Final fallback: search for faculty directory PDFs
+                logger.info(f"Trying PDF faculty directory discovery for {self.domain}")
+                pdf_faculty, pdf_urls = self._scrape_pdf_directories()
+                faculty.extend(pdf_faculty)
+                urls_scraped.extend(pdf_urls)
+
+            if not faculty:
                 logger.warning(f"No faculty directory found for {self.domain}")
 
         return {
@@ -256,6 +263,52 @@ class FacultyScraper:
                 time.sleep(self.request_delay)
             except Exception as e:
                 logger.debug(f"Search engine scrape failed: {e}")
+
+        return self._deduplicate(people), urls_scraped
+
+    def _scrape_pdf_directories(self) -> tuple[list[dict], list[str]]:
+        """Search for and parse PDF faculty directories."""
+        try:
+            from server.scraper.pdf_utils import find_pdf_urls_via_search, download_and_extract_text
+        except ImportError:
+            from pdf_utils import find_pdf_urls_via_search, download_and_extract_text
+
+        search_terms_list = [
+            "faculty directory",
+            "faculty staff directory",
+            "department faculty list",
+        ]
+        people: list[dict] = []
+        urls_scraped: list[str] = []
+
+        for search_terms in search_terms_list:
+            pdf_urls = find_pdf_urls_via_search(
+                self.domain, search_terms, session=self.session, max_results=5
+            )
+
+            for pdf_url in pdf_urls:
+                if pdf_url in urls_scraped:
+                    continue
+                time.sleep(self.request_delay)
+                text = download_and_extract_text(pdf_url, session=self.session)
+                if not text:
+                    continue
+
+                # Check this PDF actually contains faculty info
+                text_lower = text.lower()
+                if not any(kw in text_lower for kw in ["professor", "faculty", "ph.d", "department"]):
+                    continue
+
+                extracted = self._parse_from_soup(
+                    BeautifulSoup(f"<pre>{text}</pre>", "html.parser"), pdf_url
+                )
+                if extracted:
+                    people.extend(extracted)
+                    urls_scraped.append(pdf_url)
+                    logger.info(f"PDF scrape: {len(extracted)} faculty from {pdf_url}")
+
+            if people:
+                break
 
         return self._deduplicate(people), urls_scraped
 
