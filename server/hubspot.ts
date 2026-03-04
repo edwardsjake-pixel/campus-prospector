@@ -1,44 +1,10 @@
-// HubSpot integration via Replit connector (connection:conn_hubspot_01KHKDJPFY8KDHJKT2SQ1RZ9SD)
 import { Client } from '@hubspot/api-client';
 
-let connectionSettings: any;
-
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
+function getHubSpotClient() {
+  const accessToken = process.env.HUBSPOT_ACCESS_TOKEN;
+  if (!accessToken) {
+    throw new Error('HUBSPOT_ACCESS_TOKEN environment variable is not set');
   }
-
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? 'repl ' + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
-
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=hubspot',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('HubSpot not connected');
-  }
-  return accessToken;
-}
-
-async function getUncachableHubSpotClient() {
-  const accessToken = await getAccessToken();
   return new Client({ accessToken });
 }
 
@@ -205,7 +171,7 @@ export async function syncHubSpotData(
     findOrCreateDepartment: (instName: string, deptName: string) => Promise<any>;
   }
 ): Promise<HubSpotSyncResult> {
-  const client = await getUncachableHubSpotClient();
+  const client = getHubSpotClient();
   const result: HubSpotSyncResult = {
     contactsFound: 0,
     instructorsCreated: 0,
@@ -335,7 +301,7 @@ export async function fetchImportPreview(
   stageLabels: Record<string, string>,
   recentOnly: boolean = false,
 ): Promise<HubSpotImportPreviewContact[]> {
-  const client = await getUncachableHubSpotClient();
+  const client = getHubSpotClient();
   const results: HubSpotImportPreviewContact[] = [];
   const seenContactIds = new Set<string>();
   const companyNames = resolveCompanyNames(params);
@@ -396,7 +362,7 @@ export async function searchHubSpotContacts(
   stageLabels: Record<string, string>,
   recentOnly: boolean = false,
 ): Promise<HubSpotImportPreviewContact[]> {
-  const client = await getUncachableHubSpotClient();
+  const client = getHubSpotClient();
   const results: HubSpotImportPreviewContact[] = [];
   const seenContactIds = new Set<string>();
   const companyNames = resolveCompanyNames(params);
@@ -601,7 +567,7 @@ export async function getDealStageLabel(client: Client, stageId: string): Promis
 }
 
 export async function fetchDealStageLabels(): Promise<Record<string, string>> {
-  const client = await getUncachableHubSpotClient();
+  const client = getHubSpotClient();
   const labels: Record<string, string> = {};
   try {
     const pipelines = await client.crm.pipelines.pipelinesApi.getAll('deals');

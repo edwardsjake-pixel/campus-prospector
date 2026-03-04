@@ -12,8 +12,7 @@ export const organizations = pgTable("organizations", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Session storage table.
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
+// Session storage table (used by connect-pg-simple).
 export const sessions = pgTable(
   "sessions",
   {
