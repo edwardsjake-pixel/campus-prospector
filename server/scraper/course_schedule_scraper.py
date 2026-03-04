@@ -62,6 +62,11 @@ KNOWN_INSTITUTIONS: dict[str, dict] = {
         "schedule_mode": "banner",
         "sample_subjects": ["CS", "MA", "PHYS", "ENGL", "ECON", "MGMT", "IE"],
     },
+    "asu.edu": {
+        "schedule_url": "https://eadvs-cscc-catalog-api.apps.asu.edu/catalog-microservices/api/v1/search/classes",
+        "schedule_mode": "asu_api",
+        "sample_subjects": ["CSE", "MAT", "PHY", "ENG", "ECN", "MGT", "EEE", "BME", "CHM", "BIO"],
+    },
 }
 
 DAY_MAP = {
@@ -132,7 +137,9 @@ class CourseScheduleScraper:
         urls_scraped: list[str] = []
 
         known = KNOWN_INSTITUTIONS.get(self.domain, {}) if not self.custom_url else {}
-        if known and known.get("schedule_mode") == "banner":
+        if known and known.get("schedule_mode") == "asu_api":
+            courses, urls_scraped = self._scrape_asu_api(known)
+        elif known and known.get("schedule_mode") == "banner":
             courses, urls_scraped = self._scrape_banner(known)
         else:
             start_urls = [self.custom_url] if self.custom_url else self._candidate_urls()
@@ -602,6 +609,159 @@ class CourseScheduleScraper:
                 })
 
         return courses
+
+    def _scrape_asu_api(self, config: dict) -> tuple[list[dict], list[str]]:
+        """Scrape Arizona State University using their public catalog API."""
+        api_url = config["schedule_url"]
+        subjects = config.get("sample_subjects", [])
+        courses: list[dict] = []
+        urls_scraped: list[str] = []
+
+        # Determine current term code: ASU uses YYNN format (e.g., 2251 = Spring 2025)
+        now = datetime.now()
+        year_prefix = str(now.year)[:3]  # e.g., "225" for 2025
+        month = now.month
+        if month <= 5:
+            term_suffix = "1"  # Spring
+        elif month <= 7:
+            term_suffix = "7"  # Summer
+        else:
+            term_suffix = "4"  # Fall (use next year's prefix for fall)
+            year_prefix = str(now.year + 1)[:3] if month >= 10 else str(now.year)[:3]
+        term_code = f"{year_prefix}{term_suffix}"
+
+        logger.info(f"ASU API: using term code {term_code}")
+
+        for subj in subjects:
+            try:
+                time.sleep(self.request_delay)
+                params = {
+                    "refine": "Y",
+                    "campusOrOnlineSelection": "A",
+                    "term": term_code,
+                    "subject": subj,
+                    "catalogNbr": "",
+                    "searchType": "all",
+                    "honors": "F",
+                }
+                headers = {
+                    **SESSION_HEADERS,
+                    "Accept": "application/json",
+                    "Authorization": "Bearer null",
+                }
+                logger.info(f"ASU API: fetching {subj} for term {term_code}")
+                resp = self.session.get(api_url, params=params, headers=headers, timeout=30)
+
+                if resp.status_code != 200:
+                    logger.debug(f"ASU API {subj}: HTTP {resp.status_code}")
+                    continue
+
+                data = resp.json()
+                class_list = data.get("classes", [])
+                logger.info(f"ASU API {subj}: {len(class_list)} classes returned")
+
+                for cls in class_list:
+                    course = self._parse_asu_class(cls, api_url)
+                    if course:
+                        courses.append(course)
+
+                if class_list:
+                    urls_scraped.append(f"{api_url}?subject={subj}&term={term_code}")
+
+            except Exception as e:
+                logger.debug(f"ASU API subject {subj} failed: {e}")
+
+        # Fallback: try browser-based scraping if API fails
+        if not courses and BROWSER_SUPPORT:
+            logger.info("ASU API returned no results, trying browser fallback")
+            asu_urls = [
+                "https://catalog.apps.asu.edu/catalog/classes",
+                "https://webapp4.asu.edu/catalog/",
+                "https://catalog.asu.edu/",
+            ]
+            for url in asu_urls:
+                soup = self._fetch_with_browser(url)
+                if not soup:
+                    continue
+                text = soup.get_text(" ", strip=True).lower()
+                if any(kw in text for kw in ["course", "class", "schedule", "credit"]):
+                    extracted = self._extract_courses(soup, url)
+                    if extracted:
+                        courses.extend(extracted)
+                        urls_scraped.append(url)
+                        logger.info(f"ASU browser fallback: {len(extracted)} courses from {url}")
+                        break
+
+        return courses, urls_scraped
+
+    def _parse_asu_class(self, cls: dict, source_url: str) -> Optional[dict]:
+        """Parse a single class record from ASU's catalog API response."""
+        subject = cls.get("SUBJECT", "")
+        catalog_nbr = cls.get("CATALOGNBR", "")
+        code = f"{subject} {catalog_nbr}".strip()
+        if not code:
+            return None
+
+        title = cls.get("TITLE", "") or cls.get("COURSETITLELONG", "") or ""
+        instructor = cls.get("INSTRUCTORSLIST", "") or ""
+        if isinstance(instructor, list):
+            instructor = ", ".join(instructor)
+
+        # Parse meeting times from MEETINGDAYS and MEETINGTIMESTART/END
+        days_raw = cls.get("DAYSTIMELOCATIONS", "")
+        days = None
+        start_time = None
+        end_time = None
+        building = None
+        room = None
+
+        if isinstance(days_raw, str) and days_raw:
+            # Format is often like "MWF 10:00-10:50 AM, COOR 170"
+            days_match = re.search(r'([MTWRFSU]+)', days_raw)
+            if days_match:
+                days = self._parse_days(days_match.group(1))
+            time_match = re.search(r'(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\s*(AM|PM)?', days_raw, re.IGNORECASE)
+            if time_match:
+                start_time = self._normalize_time(time_match.group(1), time_match.group(3))
+                end_time = self._normalize_time(time_match.group(2), time_match.group(3))
+            loc_match = re.search(r',\s*([A-Z]+)\s+(\d+)', days_raw)
+            if loc_match:
+                building = loc_match.group(1)
+                room = loc_match.group(2)
+        elif isinstance(days_raw, list):
+            # Sometimes it's a list of meeting objects
+            for meeting in days_raw:
+                if isinstance(meeting, dict):
+                    d = meeting.get("days", "")
+                    if d:
+                        days = self._parse_days(d)
+                    st = meeting.get("startTime", "") or meeting.get("start_time", "")
+                    et = meeting.get("endTime", "") or meeting.get("end_time", "")
+                    if st:
+                        start_time, _ = self._parse_time_range(st)
+                    if et:
+                        _, end_time = self._parse_time_range(et)
+                    building = meeting.get("building", building)
+                    room = meeting.get("room", room)
+                    break
+
+        enrollment = self._safe_int(str(cls.get("ENRLTOT", ""))) if cls.get("ENRLTOT") is not None else None
+        max_enrollment = self._safe_int(str(cls.get("ENRLCAP", ""))) if cls.get("ENRLCAP") is not None else None
+
+        return {
+            "code": code[:30],
+            "name": title[:120],
+            "days_of_week": days,
+            "start_time": start_time,
+            "end_time": end_time,
+            "building": (building or "")[:80] or None,
+            "room_number": (room or "")[:20] or None,
+            "enrollment_count": enrollment,
+            "max_enrollment": max_enrollment,
+            "instructor_name": instructor[:80] if instructor else None,
+            "source_url": source_url,
+            "scraped_date": datetime.now().strftime("%Y-%m-%d"),
+        }
 
     def _deduplicate(self, courses: list[dict]) -> list[dict]:
         seen: set[str] = set()

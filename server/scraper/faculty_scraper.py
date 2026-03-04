@@ -62,6 +62,11 @@ KNOWN_INSTITUTIONS: dict[str, dict] = {
         "directory_url": "https://www.purdue.edu/directory/",
         "search_mode": "purdue_ldap",
     },
+    "asu.edu": {
+        "directory_url": "https://search.asu.edu/profile",
+        "search_mode": "asu_isearch",
+        "api_url": "https://asudir-solr.asu.edu/asudir/directory/select",
+    },
 }
 
 TENURE_KEYWORDS = {
@@ -141,7 +146,11 @@ class FacultyScraper:
         if known:
             search_mode = known.get("search_mode")
             dir_url = known.get("directory_url")
-            if search_mode == "purdue_ldap":
+            if search_mode == "asu_isearch":
+                people, scraped = self._scrape_asu_isearch(known)
+                faculty.extend(people)
+                urls_scraped.extend(scraped)
+            elif search_mode == "purdue_ldap":
                 people, scraped = self._scrape_purdue_directory(dir_url)
                 faculty.extend(people)
                 urls_scraped.extend(scraped)
@@ -564,7 +573,7 @@ class FacultyScraper:
         if len(parts) < 2 or len(parts) > 5:
             return False
         skip = {"university", "college", "department", "contact", "office", "email",
-                "professor", "faculty", "staff", "research", "the", "and", "for"}
+                "professor", "faculty", "research", "the", "and", "for"}
         for p in parts:
             if p.lower() in skip:
                 return False
@@ -750,6 +759,141 @@ class FacultyScraper:
             people = self._parse_from_soup(soup, source_url)
 
         return people
+
+    def _scrape_asu_isearch(self, config: dict) -> tuple[list[dict], list[str]]:
+        """Scrape Arizona State University faculty via iSearch/Solr API."""
+        api_url = config.get("api_url", "https://asudir-solr.asu.edu/asudir/directory/select")
+        dir_url = config.get("directory_url", "https://search.asu.edu/profile")
+        people: list[dict] = []
+        urls_scraped: list[str] = []
+
+        # Search for faculty/professors across key departments
+        dept_queries = [
+            "professor",
+            "associate professor",
+            "assistant professor",
+            "lecturer",
+            "instructor",
+        ]
+
+        for query in dept_queries:
+            try:
+                time.sleep(self.request_delay)
+                params = {
+                    "q": query,
+                    "fq": "affiliations:Faculty",
+                    "rows": 200,
+                    "start": 0,
+                    "wt": "json",
+                    "fl": "displayName,emailAddress,phone,primaryTitle,bio,photoUrl,buildingName,roomNumber,deptids,primaryDeptName",
+                }
+                logger.info(f"ASU iSearch: querying '{query}'")
+                resp = self.session.get(api_url, params=params, timeout=30)
+
+                if resp.status_code != 200:
+                    logger.debug(f"ASU iSearch query '{query}': HTTP {resp.status_code}")
+                    # Fallback: try scraping iSearch web pages
+                    continue
+
+                data = resp.json()
+                docs = data.get("response", {}).get("docs", [])
+                logger.info(f"ASU iSearch '{query}': {len(docs)} results")
+
+                for doc in docs:
+                    person = self._parse_asu_faculty(doc, dir_url)
+                    if person:
+                        people.append(person)
+
+                if docs:
+                    urls_scraped.append(f"{api_url}?q={query}")
+
+            except Exception as e:
+                logger.debug(f"ASU iSearch query '{query}' failed: {e}")
+
+        # Fallback: try browser-based scraping of iSearch web UI
+        if not people and BROWSER_SUPPORT:
+            logger.info("ASU iSearch API failed, trying browser fallback on web UI")
+            asu_faculty_urls = [
+                "https://search.asu.edu/profile?dept=&campus=TEMPE&title=professor",
+                "https://isearch.asu.edu/asu-people?dept_id=&title=professor",
+                f"https://www.asu.edu/faculty",
+                f"https://www.asu.edu/about/faculty",
+            ]
+            for url in asu_faculty_urls:
+                soup = self._fetch_with_browser(url)
+                if not soup:
+                    continue
+                text = soup.get_text(" ", strip=True).lower()
+                if any(kw in text for kw in ["professor", "faculty", "ph.d"]):
+                    extracted = self._parse_html_cards(soup, url)
+                    if not extracted:
+                        extracted = self._parse_from_soup(soup, url)
+                    if extracted:
+                        people.extend(extracted)
+                        urls_scraped.append(url)
+                        logger.info(f"ASU browser fallback: {len(extracted)} faculty from {url}")
+                        break
+
+        # Final fallback: search engine discovery
+        if not people:
+            logger.info("ASU: falling back to search engine discovery")
+            search_people, search_urls = self._scrape_via_search_engine()
+            people.extend(search_people)
+            urls_scraped.extend(search_urls)
+
+        return self._deduplicate(people), urls_scraped
+
+    def _parse_asu_faculty(self, doc: dict, base_url: str) -> Optional[dict]:
+        """Parse a single ASU iSearch Solr document into a faculty record."""
+        name = doc.get("displayName", "")
+        if not name or not self._is_valid_name(name):
+            return None
+
+        email = doc.get("emailAddress", "")
+        if isinstance(email, list):
+            email = email[0] if email else ""
+
+        phone = doc.get("phone", "")
+        if isinstance(phone, list):
+            phone = phone[0] if phone else ""
+
+        title = doc.get("primaryTitle", "")
+        if isinstance(title, list):
+            title = title[0] if title else ""
+
+        bio = doc.get("bio", "")
+        if isinstance(bio, list):
+            bio = bio[0] if bio else ""
+        if bio:
+            bio = re.sub(r'<[^>]+>', '', bio)[:500]  # Strip HTML tags
+
+        photo_url = doc.get("photoUrl", "")
+        if isinstance(photo_url, list):
+            photo_url = photo_url[0] if photo_url else ""
+
+        building = doc.get("buildingName", "")
+        room = doc.get("roomNumber", "")
+        if isinstance(building, list):
+            building = building[0] if building else ""
+        if isinstance(room, list):
+            room = room[0] if room else ""
+        office = f"{building} {room}".strip() if (building or room) else None
+
+        tenure_status = self._infer_tenure_status(title, (title or "") + " " + (bio or ""))
+
+        return {
+            "name": name,
+            "email": email or None,
+            "phone": phone or None,
+            "title": title or None,
+            "tenure_status": tenure_status,
+            "bio": bio or None,
+            "photo_url": photo_url or None,
+            "office_location": office,
+            "institution": self.institution_name,
+            "source_url": base_url,
+            "scraped_date": datetime.now().strftime("%Y-%m-%d"),
+        }
 
     def _deduplicate(self, people: list[dict]) -> list[dict]:
         seen: dict[str, dict] = {}
